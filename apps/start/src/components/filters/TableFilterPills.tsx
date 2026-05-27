@@ -62,7 +62,7 @@ function formatFilterValue(filter: IChartEventFilter): string {
   }
   if (filter.name === 'session.has_replay') {
     const v = filter.value[0];
-    if (v === undefined) return 'Yes';
+    if (v === undefined) return '';
     const truthy =
       typeof v === 'boolean' ? v : String(v).toLowerCase() === 'true';
     return truthy ? 'Yes' : 'No';
