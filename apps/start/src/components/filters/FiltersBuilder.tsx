@@ -63,6 +63,18 @@ export function FiltersBuilder({
       ]);
       return;
     }
+    if (action.value === 'session.has_replay') {
+      onChange([
+        ...value,
+        {
+          id: action.value,
+          name: action.value,
+          operator: 'is',
+          value: [true],
+        },
+      ]);
+      return;
+    }
     onChange([
       ...value,
       {

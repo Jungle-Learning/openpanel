@@ -34,6 +34,7 @@ const SESSION_LABELS: Record<string, string> = {
   'session.event_count': 'Events',
   'session.duration': 'Duration',
   'session.revenue': 'Revenue',
+  'session.has_replay': 'Has replay',
   'session.performed_event': 'Performed event',
 };
 
@@ -55,6 +56,13 @@ function formatFilterValue(filter: IChartEventFilter): string {
   if (filter.name === 'session.is_bounce') {
     const v = filter.value[0];
     if (v === undefined) return '';
+    const truthy =
+      typeof v === 'boolean' ? v : String(v).toLowerCase() === 'true';
+    return truthy ? 'Yes' : 'No';
+  }
+  if (filter.name === 'session.has_replay') {
+    const v = filter.value[0];
+    if (v === undefined) return 'Yes';
     const truthy =
       typeof v === 'boolean' ? v : String(v).toLowerCase() === 'true';
     return truthy ? 'Yes' : 'No';

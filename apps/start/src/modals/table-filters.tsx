@@ -74,6 +74,18 @@ export default function TableFilters({
       ]);
       return;
     }
+    if (action.value === 'session.has_replay') {
+      setFilters([
+        ...filters,
+        {
+          id: action.value,
+          name: action.value,
+          operator: 'is',
+          value: [true],
+        },
+      ]);
+      return;
+    }
     // Use the property name as the id so the URL serializer (which encodes
     // by name) round-trips cleanly on reload.
     setFilters([
