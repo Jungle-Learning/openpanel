@@ -268,13 +268,14 @@ function buildSessionClause(
 
   if (fieldName === 'has_replay') {
     if (filter.operator !== 'is' && filter.operator !== 'isNot') return null;
-    const wantsReplay =
-      filter.value.length === 0 ||
-      filter.value.some((v) =>
-        typeof v === 'boolean' ? v : String(v).toLowerCase() === 'true',
-      );
+    if (filter.value.length === 0) return null;
+    const filterValueIndicatesHasReplay = filter.value.some((v) =>
+      typeof v === 'boolean' ? v : String(v).toLowerCase() === 'true',
+    );
     const shouldHaveReplay =
-      filter.operator === 'isNot' ? !wantsReplay : wantsReplay;
+      filter.operator === 'isNot'
+        ? !filterValueIndicatesHasReplay
+        : filterValueIndicatesHasReplay;
     const replayDateScope: string[] = [];
     if (ctx.startDate && ctx.endDate) {
       replayDateScope.push(

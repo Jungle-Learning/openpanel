@@ -42,4 +42,43 @@ describe('buildFilterWhere', () => {
     expect(where.f0).toContain('id NOT IN');
     expect(where.f0).toContain('session_replay_chunks');
   });
+
+  it('filters sessions to rows without replay chunks when value is false', () => {
+    const where = buildFilterWhere(
+      [
+        {
+          name: 'session.has_replay',
+          operator: 'is',
+          value: [false],
+        },
+      ],
+      'project-1',
+      {
+        selfTable: 'sessions',
+        profileIdExpr: 'profile_id',
+      },
+    );
+
+    expect(where.f0).toContain('id NOT IN');
+    expect(where.f0).toContain('session_replay_chunks');
+  });
+
+  it('ignores session replay filters outside the sessions table', () => {
+    const where = buildFilterWhere(
+      [
+        {
+          name: 'session.has_replay',
+          operator: 'is',
+          value: [true],
+        },
+      ],
+      'project-1',
+      {
+        selfTable: 'events',
+        profileIdExpr: 'profile_id',
+      },
+    );
+
+    expect(where).toEqual({});
+  });
 });
