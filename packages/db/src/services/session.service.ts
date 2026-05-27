@@ -245,14 +245,14 @@ export async function getSessionList(options: GetSessionListOptions) {
     sb.select[column] = column;
   });
 
-  sb.select.has_replay = `toBool(src.session_id != '') as hasReplay`;
+  sb.select.has_replay = `toBool(src.session_id != '') as has_replay`;
   sb.joins.has_replay = `LEFT JOIN (SELECT DISTINCT session_id FROM ${TABLE_NAMES.session_replay_chunks} WHERE project_id = ${sqlstring.escape(projectId)} AND started_at > now() - INTERVAL ${dateIntervalInDays} DAY) AS src ON src.session_id = id`;
 
   const sql = getSql();
   const data = await chQuery<
     IClickhouseSession & {
       latestCreatedAt: string;
-      hasReplay: boolean;
+      has_replay: boolean;
     }
   >(sql);
 

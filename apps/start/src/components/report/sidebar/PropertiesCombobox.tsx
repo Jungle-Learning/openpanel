@@ -81,6 +81,11 @@ const SESSION_ACTIONS: PropertiesComboboxAction[] = [
     description: 'Revenue attributed to the session',
   },
   {
+    value: 'session.has_replay',
+    label: 'Has replay',
+    description: 'Session has recorded replay chunks',
+  },
+  {
     value: 'session.performed_event',
     label: 'Performed event',
     description: 'Session contains an event named X',

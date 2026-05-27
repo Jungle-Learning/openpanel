@@ -266,6 +266,28 @@ function buildSessionClause(
     return `id ${op} (SELECT DISTINCT session_id FROM ${TABLE_NAMES.events} WHERE project_id = ${sqlstring.escape(projectId)} ${scopeSql}AND name ${inClause})`;
   }
 
+  if (fieldName === 'has_replay') {
+    if (filter.operator !== 'is' && filter.operator !== 'isNot') return null;
+    if (filter.value.length === 0) return null;
+    const filterValueIndicatesHasReplay = filter.value.some((v) =>
+      typeof v === 'boolean' ? v : String(v).toLowerCase() === 'true',
+    );
+    const shouldHaveReplay =
+      filter.operator === 'isNot'
+        ? !filterValueIndicatesHasReplay
+        : filterValueIndicatesHasReplay;
+    const replayDateScope: string[] = [];
+    if (ctx.startDate && ctx.endDate) {
+      replayDateScope.push(
+        `toDate(started_at) BETWEEN toDate('${formatClickhouseDate(ctx.startDate)}') AND toDate('${formatClickhouseDate(ctx.endDate)}')`,
+      );
+    }
+    const replayScopeSql = replayDateScope.length
+      ? ` AND ${replayDateScope.join(' AND ')}`
+      : '';
+    return `id ${shouldHaveReplay ? 'IN' : 'NOT IN'} (SELECT DISTINCT session_id FROM ${TABLE_NAMES.session_replay_chunks} WHERE project_id = ${sqlstring.escape(projectId)}${replayScopeSql})`;
+  }
+
   if (fieldName === 'is_bounce') {
     if (filter.value.length === 0) return null;
     const wants = filter.value.some((v) =>
