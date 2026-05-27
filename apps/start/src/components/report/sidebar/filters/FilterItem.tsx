@@ -126,7 +126,8 @@ export function PureFilterItem({
 }: PureFilterProps) {
   const { projectId } = useAppParams();
 
-  const isBooleanSessionFilter = filter.name === 'session.is_bounce';
+  const isBooleanSessionFilter =
+    filter.name === 'session.is_bounce' || filter.name === 'session.has_replay';
   const isPerformedEventFilter = filter.name === 'session.performed_event';
 
   const potentialValues = usePropertyValues({
