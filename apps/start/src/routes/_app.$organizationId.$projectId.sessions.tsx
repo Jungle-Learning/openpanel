@@ -4,13 +4,9 @@ import { SessionsTable } from '@/components/sessions/table';
 import { useSearchQueryState } from '@/hooks/use-search-query-state';
 import { useTRPC } from '@/integrations/trpc/react';
 import { PAGE_TITLES, createProjectTitle } from '@/utils/title';
-import {
-  keepPreviousData,
-  useInfiniteQuery,
-  useQuery,
-} from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { parseAsString, parseAsStringEnum, useQueryState } from 'nuqs';
+import { parseAsBoolean, useQueryState } from 'nuqs';
 
 export const Route = createFileRoute(
   '/_app/$organizationId/$projectId/sessions',
@@ -31,6 +27,10 @@ function Component() {
   const { projectId } = Route.useParams();
   const trpc = useTRPC();
   const { debouncedSearch } = useSearchQueryState();
+  const [hasReplay] = useQueryState(
+    'hasReplay',
+    parseAsBoolean.withDefault(false),
+  );
 
   const query = useInfiniteQuery(
     trpc.session.list.infiniteQueryOptions(
@@ -38,6 +38,7 @@ function Component() {
         projectId,
         take: 50,
         search: debouncedSearch,
+        hasReplay,
       },
       {
         getNextPageParam: (lastPage) => lastPage.meta.next,

@@ -44,6 +44,7 @@ import {
   DataTableToolbarContainer,
 } from '@/components/ui/data-table/data-table-toolbar';
 import { DataTableViewOptions } from '@/components/ui/data-table/data-table-view-options';
+import { Button } from '@/components/ui/button';
 import { useAppParams } from '@/hooks/use-app-params';
 import { useSearchQueryState } from '@/hooks/use-search-query-state';
 import { arePropsEqual } from '@/utils/are-props-equal';
@@ -54,7 +55,8 @@ import type { Table } from '@tanstack/react-table';
 import { getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import type { TRPCInfiniteData } from '@trpc/tanstack-react-query';
-import { Loader2Icon } from 'lucide-react';
+import { Loader2Icon, VideoIcon } from 'lucide-react';
+import { parseAsBoolean, useQueryState } from 'nuqs';
 import { last } from 'ramda';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInViewport } from 'react-in-viewport';
@@ -352,6 +354,10 @@ export const SessionsTable = ({ query }: Props) => {
 
 function SessionTableToolbar({ table }: { table: Table<IServiceSession> }) {
   const { search, setSearch } = useSearchQueryState();
+  const [hasReplay, setHasReplay] = useQueryState(
+    'hasReplay',
+    parseAsBoolean.withDefault(false),
+  );
   return (
     <DataTableToolbarContainer>
       <AnimatedSearchInput
@@ -359,6 +365,14 @@ function SessionTableToolbar({ table }: { table: Table<IServiceSession> }) {
         value={search}
         onChange={setSearch}
       />
+      <Button
+        aria-pressed={hasReplay}
+        icon={VideoIcon}
+        onClick={() => setHasReplay(!hasReplay)}
+        variant={hasReplay ? 'default' : 'outline'}
+      >
+        Has replay
+      </Button>
       <DataTableViewOptions table={table} />
     </DataTableToolbarContainer>
   );
