@@ -41,6 +41,7 @@ export const sessionRouter = createTRPCRouter({
         startDate: z.date().optional(),
         endDate: z.date().optional(),
         search: z.string().optional(),
+        hasReplay: z.boolean().optional(),
         take: z.number().default(50),
       })
     )

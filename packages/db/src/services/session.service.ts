@@ -106,6 +106,7 @@ export interface GetSessionListOptions {
   startDate?: Date;
   endDate?: Date;
   search?: string;
+  hasReplay?: boolean;
   cursor?: Cursor | null;
 }
 
@@ -169,6 +170,7 @@ export async function getSessionList({
   startDate,
   endDate,
   search,
+  hasReplay,
 }: GetSessionListOptions) {
   const { sb, getSql } = createSqlBuilder();
 
@@ -198,6 +200,10 @@ export async function getSessionList({
     organization?.subscriptionPeriodEventsLimit > 1_000_000
       ? 2
       : 360;
+
+  if (hasReplay) {
+    sb.where.hasReplay = `id IN (SELECT DISTINCT session_id FROM ${TABLE_NAMES.session_replay_chunks} WHERE project_id = ${sqlstring.escape(projectId)} AND started_at > now() - INTERVAL ${dateIntervalInDays} DAY)`;
+  }
 
   if (cursor) {
     const cAt = sqlstring.escape(cursor.createdAt);
@@ -238,7 +244,7 @@ export async function getSessionList({
     sb.select[column] = column;
   });
 
-  sb.select.has_replay = `toBool(src.session_id != '') as hasReplay`;
+  sb.select.has_replay = `toBool(src.session_id != '') as has_replay`;
   sb.joins.has_replay = `LEFT JOIN (SELECT DISTINCT session_id FROM ${TABLE_NAMES.session_replay_chunks} WHERE project_id = ${sqlstring.escape(projectId)} AND started_at > now() - INTERVAL ${dateIntervalInDays} DAY) AS src ON src.session_id = id`;
 
   const sql = getSql();

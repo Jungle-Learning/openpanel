@@ -11,7 +11,21 @@ import { useMemo } from 'react';
 
 export const getIsomorphicHeaders = createIsomorphicFn()
   .server(() => {
-    return getRequestHeaders();
+    const headers = new Headers(getRequestHeaders());
+    [
+      'accept-encoding',
+      'connection',
+      'content-length',
+      'host',
+      'keep-alive',
+      'proxy-authenticate',
+      'proxy-authorization',
+      'te',
+      'trailer',
+      'transfer-encoding',
+      'upgrade',
+    ].forEach((header) => headers.delete(header));
+    return headers;
   })
   .client(() => {
     return {};
