@@ -102,6 +102,7 @@ export function ReportSeriesItem({
                             name: action.value,
                             operator: 'is',
                             value: [],
+                            type: 'string',
                           },
                     ],
                   }),
