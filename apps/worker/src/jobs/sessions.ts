@@ -57,16 +57,22 @@ const updateEventsCount = cacheable(async function updateEventsCount(
   }
 
   if (organizationEventsCount) {
+    // Self-hosting has no billing/event limits. Never flag the org as
+    // exceeded, and clear any stale flag that was set before this guard
+    // existed (default limit is 0, which otherwise trips on the first event).
+    const isSelfHosted = process.env.SELF_HOSTED === 'true';
+
     await db.organization.update({
       where: {
         id: organization.id,
       },
       data: {
         subscriptionPeriodEventsCount: organizationEventsCount,
-        subscriptionPeriodEventsCountExceededAt:
-          organizationEventsCount >
-            organization.subscriptionPeriodEventsLimit &&
-          !organization.subscriptionPeriodEventsCountExceededAt
+        subscriptionPeriodEventsCountExceededAt: isSelfHosted
+          ? null
+          : organizationEventsCount >
+                organization.subscriptionPeriodEventsLimit &&
+              !organization.subscriptionPeriodEventsCountExceededAt
             ? new Date()
             : organizationEventsCount <=
                 organization.subscriptionPeriodEventsLimit
