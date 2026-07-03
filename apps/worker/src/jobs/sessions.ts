@@ -11,6 +11,8 @@ import {
 import { cacheable } from '@openpanel/redis';
 import { createSessionEnd } from './events.create-session-end';
 
+const INT4_MAX = 2_147_483_647;
+
 export async function sessionsJob(job: Job<SessionsQueuePayload>) {
   const res = await createSessionEnd(job);
   try {
@@ -51,7 +53,10 @@ const updateEventsCount = cacheable(async function updateEventsCount(
         id: projectId,
       },
       data: {
-        eventsCount: projectEventsCount,
+        // Saturating counter: the column is INT4 and lifetime counts can
+        // exceed it. It's only used as a sort key and activity threshold,
+        // never for billing, so clamping is safe.
+        eventsCount: Math.min(projectEventsCount, INT4_MAX),
       },
     });
   }
@@ -67,7 +72,10 @@ const updateEventsCount = cacheable(async function updateEventsCount(
         id: organization.id,
       },
       data: {
-        subscriptionPeriodEventsCount: organizationEventsCount,
+        subscriptionPeriodEventsCount: Math.min(
+          organizationEventsCount,
+          INT4_MAX,
+        ),
         subscriptionPeriodEventsCountExceededAt: isSelfHosted
           ? null
           : organizationEventsCount >
