@@ -33,7 +33,7 @@ export async function requestLoggingHook(
         input: getTrpcInput(request),
         elapsed: reply.elapsedTime,
       },
-      'request done',
+      'request done'
     );
   } else {
     const payload: {
@@ -42,6 +42,9 @@ export async function requestLoggingHook(
       elapsed: number;
       headers: Record<string, string | string[] | undefined>;
       body?: unknown;
+      clientIp: string;
+      clientIpHeader: string;
+      userAgent: string;
     } = {
       url: request.url,
       method: request.method,
@@ -50,10 +53,24 @@ export async function requestLoggingHook(
         ['openpanel-client-id', 'openpanel-sdk-name', 'openpanel-sdk-version'],
         request.headers
       ),
+      clientIp: '',
+      clientIpHeader: '',
+      userAgent: '',
     };
 
     if (payload.url.startsWith('/track')) {
       payload.body = request.body;
+    }
+
+    const clientId = request.headers['openpanel-client-id'];
+    if (
+      process.env.ENABLE_VERBOSE_LOGGING?.split(',').includes(
+        (Array.isArray(clientId) ? clientId[0] : clientId) ?? ''
+      )
+    ) {
+      payload.clientIp = request.clientIp;
+      payload.clientIpHeader = request.clientIpHeader;
+      payload.userAgent = request.headers['user-agent'] ?? '';
     }
 
     request.log.info(payload, 'request done');
