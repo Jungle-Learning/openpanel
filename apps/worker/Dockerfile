@@ -5,6 +5,10 @@ FROM node:${NODE_VERSION}-slim AS base
 # FIX: Bad workaround (https://github.com/nodejs/corepack/issues/612)
 ENV COREPACK_INTEGRITY_KEYS=0
 
+ARG OPENPANEL_RELEASE_SHA=unknown
+ENV OPENPANEL_RELEASE_SHA=$OPENPANEL_RELEASE_SHA
+LABEL org.opencontainers.image.revision=$OPENPANEL_RELEASE_SHA
+
 ARG DATABASE_URL
 ENV DATABASE_URL=$DATABASE_URL
 ENV PNPM_HOME="/pnpm"

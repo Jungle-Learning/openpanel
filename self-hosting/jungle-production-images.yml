@@ -1,0 +1,10 @@
+services:
+  openpanel-api:
+    image: ghcr.io/jungle-learning/api:production
+    pull_policy: never
+  openpanel-worker:
+    image: ghcr.io/jungle-learning/worker:production
+    pull_policy: never
+  openpanel-dashboard:
+    image: ghcr.io/jungle-learning/dashboard:production
+    pull_policy: never

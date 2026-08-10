@@ -29,6 +29,13 @@ on:
       - "**/.eslintignore"
       - "**/.prettierignore"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: openpanel-release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   repo_owner: "jungle-learning"
 
@@ -73,23 +80,29 @@ jobs:
           --health-timeout 3s
           --health-retries 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate production deployment script
+        run: |
+          bash -n scripts/deploy-openpanel-production.sh
+          bash -n scripts/prefetch-openpanel-production-images.sh
+          bash scripts/deploy-openpanel-production.test.sh
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
 
       - name: Get pnpm store directory
         shell: bash
         run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+          echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
 
       - name: Setup pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ env.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -141,16 +154,16 @@ jobs:
       - name: Prepare platform pair
         run: |
           platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -158,7 +171,7 @@ jobs:
 
       - name: Build and push by digest
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: apps/api/Dockerfile
@@ -168,6 +181,7 @@ jobs:
           outputs: type=image,name=ghcr.io/${{ env.repo_owner }}/api,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy
+            OPENPANEL_RELEASE_SHA=${{ github.sha }}
 
       - name: Export digest
         run: |
@@ -176,7 +190,7 @@ jobs:
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: digests-api-${{ env.PLATFORM_PAIR }}
           path: /tmp/digests/*
@@ -191,10 +205,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Download digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: /tmp/digests
           pattern: digests-api-*
@@ -203,16 +217,14 @@ jobs:
       - name: Generate tags
         id: tags
         run: |
-          BRANCH_NAME=$(echo "${{ github.ref_name }}" | sed 's/\//-/g')
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-4)
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          branch_name="${GITHUB_REF_NAME//\//-}"
+          printf 'image_tag=%s-%s\n' "${branch_name:0:80}" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -221,9 +233,13 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
+          digest_references=()
+          for digest_file in *; do
+            digest_references+=("ghcr.io/${{ env.repo_owner }}/api@sha256:${digest_file}")
+          done
           docker buildx imagetools create \
-            -t ghcr.io/${{ env.repo_owner }}/api:${{ steps.tags.outputs.branch_name }}-${{ steps.tags.outputs.short_sha }} \
-            $(printf 'ghcr.io/${{ env.repo_owner }}/api@sha256:%s ' *)
+            -t ghcr.io/${{ env.repo_owner }}/api:${{ steps.tags.outputs.image_tag }} \
+            "${digest_references[@]}"
 
       - name: Create/Update API tag
         if: github.ref == 'refs/heads/main'
@@ -260,16 +276,16 @@ jobs:
       - name: Prepare platform pair
         run: |
           platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -277,7 +293,7 @@ jobs:
 
       - name: Build and push by digest
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: apps/worker/Dockerfile
@@ -287,6 +303,7 @@ jobs:
           outputs: type=image,name=ghcr.io/${{ env.repo_owner }}/worker,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy
+            OPENPANEL_RELEASE_SHA=${{ github.sha }}
 
       - name: Export digest
         run: |
@@ -295,7 +312,7 @@ jobs:
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: digests-worker-${{ env.PLATFORM_PAIR }}
           path: /tmp/digests/*
@@ -310,10 +327,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Download digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: /tmp/digests
           pattern: digests-worker-*
@@ -322,16 +339,14 @@ jobs:
       - name: Generate tags
         id: tags
         run: |
-          BRANCH_NAME=$(echo "${{ github.ref_name }}" | sed 's/\//-/g')
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-4)
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          branch_name="${GITHUB_REF_NAME//\//-}"
+          printf 'image_tag=%s-%s\n' "${branch_name:0:80}" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -340,9 +355,13 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
+          digest_references=()
+          for digest_file in *; do
+            digest_references+=("ghcr.io/${{ env.repo_owner }}/worker@sha256:${digest_file}")
+          done
           docker buildx imagetools create \
-            -t ghcr.io/${{ env.repo_owner }}/worker:${{ steps.tags.outputs.branch_name }}-${{ steps.tags.outputs.short_sha }} \
-            $(printf 'ghcr.io/${{ env.repo_owner }}/worker@sha256:%s ' *)
+            -t ghcr.io/${{ env.repo_owner }}/worker:${{ steps.tags.outputs.image_tag }} \
+            "${digest_references[@]}"
 
       - name: Create/Update Worker tag
         if: github.ref == 'refs/heads/main'
@@ -379,16 +398,16 @@ jobs:
       - name: Prepare platform pair
         run: |
           platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -396,7 +415,7 @@ jobs:
 
       - name: Build and push by digest
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: apps/start/Dockerfile
@@ -406,6 +425,7 @@ jobs:
           outputs: type=image,name=ghcr.io/${{ env.repo_owner }}/dashboard,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             NO_CLOUDFLARE=1
+            OPENPANEL_RELEASE_SHA=${{ github.sha }}
 
       - name: Export digest
         run: |
@@ -414,7 +434,7 @@ jobs:
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: digests-dashboard-${{ env.PLATFORM_PAIR }}
           path: /tmp/digests/*
@@ -429,10 +449,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Download digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: /tmp/digests
           pattern: digests-dashboard-*
@@ -441,16 +461,14 @@ jobs:
       - name: Generate tags
         id: tags
         run: |
-          BRANCH_NAME=$(echo "${{ github.ref_name }}" | sed 's/\//-/g')
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-4)
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          branch_name="${GITHUB_REF_NAME//\//-}"
+          printf 'image_tag=%s-%s\n' "${branch_name:0:80}" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -459,9 +477,13 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
+          digest_references=()
+          for digest_file in *; do
+            digest_references+=("ghcr.io/${{ env.repo_owner }}/dashboard@sha256:${digest_file}")
+          done
           docker buildx imagetools create \
-            -t ghcr.io/${{ env.repo_owner }}/dashboard:${{ steps.tags.outputs.branch_name }}-${{ steps.tags.outputs.short_sha }} \
-            $(printf 'ghcr.io/${{ env.repo_owner }}/dashboard@sha256:%s ' *)
+            -t ghcr.io/${{ env.repo_owner }}/dashboard:${{ steps.tags.outputs.image_tag }} \
+            "${digest_references[@]}"
 
       - name: Create/Update Dashboard tag
         if: github.ref == 'refs/heads/main'
@@ -479,3 +501,50 @@ jobs:
           # Push tag to remote
           git push origin "dashboard" --force
           echo "Pushed tag: dashboard"
+
+  deploy-production:
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    needs:
+      - merge-api
+      - merge-worker
+      - merge-dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure production image prefetch access
+        env:
+          OPENPANEL_PREFETCH_KNOWN_HOSTS: ${{ secrets.OPENPANEL_PREFETCH_KNOWN_HOSTS }}
+          OPENPANEL_PREFETCH_SSH_PRIVATE_KEY: ${{ secrets.OPENPANEL_PREFETCH_SSH_PRIVATE_KEY }}
+        run: |
+          install -m 600 /dev/null "${RUNNER_TEMP}/openpanel-prefetch-key"
+          printf '%s\n' "$OPENPANEL_PREFETCH_SSH_PRIVATE_KEY" > "${RUNNER_TEMP}/openpanel-prefetch-key"
+          install -m 600 /dev/null "${RUNNER_TEMP}/openpanel-known-hosts"
+          printf '%s\n' "$OPENPANEL_PREFETCH_KNOWN_HOSTS" > "${RUNNER_TEMP}/openpanel-known-hosts"
+
+      - name: Deploy and verify production
+        run: bash scripts/deploy-openpanel-production.sh
+        env:
+          GHCR_PULL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_PULL_USERNAME: ${{ github.actor }}
+          GITHUB_SHA: ${{ github.sha }}
+          OPENPANEL_API_HEALTH_URL: https://op-api.jungleai.com/healthcheck
+          OPENPANEL_DASHBOARD_HEALTH_URL: https://analytics.jungleai.com/api/healthcheck
+          OPENPANEL_KNOWN_HOSTS_PATH: ${{ runner.temp }}/openpanel-known-hosts
+          OPENPANEL_PREFETCH_HOST: ${{ vars.OPENPANEL_PREFETCH_HOST }}
+          OPENPANEL_PREFETCH_SSH_KEY_PATH: ${{ runner.temp }}/openpanel-prefetch-key
+          OPENPANEL_PREFETCH_USER: ${{ vars.OPENPANEL_PREFETCH_USER }}
