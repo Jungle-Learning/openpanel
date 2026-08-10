@@ -158,16 +158,31 @@ rollback_release() {
   rollback_in_progress=true
   echo "Release verification failed; rolling back production images" >&2
 
-  if restore_previous_images; then
-    prefetch_images
+  if restore_previous_images && prefetch_images; then
+    echo "Previous production images restored from the registry"
   else
-    echo "Previous registry manifests were incomplete; using the local rollback snapshot" >&2
-    restore_local_images
+    echo "Registry rollback was unavailable; using the local rollback snapshot" >&2
+    if ! restore_local_images; then
+      echo "Failed to restore the local rollback snapshot" >&2
+      return 1
+    fi
   fi
-  deploy_stack
 
-  curl --fail --silent --show-error "$OPENPANEL_API_HEALTH_URL" > /dev/null
-  curl --fail --silent --show-error "$OPENPANEL_DASHBOARD_HEALTH_URL" > /dev/null
+  if ! deploy_stack; then
+    echo "Failed to deploy the rollback images" >&2
+    return 1
+  fi
+
+  if ! curl --fail --silent --show-error "$OPENPANEL_API_HEALTH_URL" > /dev/null; then
+    echo "API health check failed after rollback" >&2
+    return 1
+  fi
+
+  if ! curl --fail --silent --show-error "$OPENPANEL_DASHBOARD_HEALTH_URL" > /dev/null; then
+    echo "Dashboard health check failed after rollback" >&2
+    return 1
+  fi
+
   echo "Rollback deployment is healthy"
 }
 

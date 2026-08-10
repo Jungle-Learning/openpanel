@@ -53,7 +53,7 @@ echo "$url" >> "$TEST_CURL_CALLS"
 
 case "$url" in
   *api-health*)
-    if [[ "$TEST_SCENARIO" == rollback ]] \
+    if [[ "$TEST_SCENARIO" =~ ^rollback(-failure)?$ ]] \
       && [[ "$(grep -c '^deploy ' "$TEST_SSH_CALLS" 2>/dev/null || true)" -lt 2 ]]; then
       exit 22
     fi
@@ -83,6 +83,12 @@ elif [[ "$operation" != "restore-local" && "$operation" != "deploy" ]]; then
   exit 1
 fi
 echo "$operation $*" >> "$TEST_SSH_CALLS"
+
+if [[ "$TEST_SCENARIO" == rollback-failure ]] \
+  && [[ "$operation" == "deploy" ]] \
+  && [[ "$(grep -c '^deploy ' "$TEST_SSH_CALLS")" -ge 2 ]]; then
+  exit 1
+fi
 STUB
 
 chmod +x "${stub_directory}/docker" "${stub_directory}/curl" "${stub_directory}/ssh"
@@ -146,5 +152,25 @@ set -e
 grep -q "Rollback deployment is healthy" "${test_directory}/rollback-output"
 [[ "$(grep -c -- '--tag .*:production' "$TEST_DOCKER_CALLS")" -eq 6 ]]
 [[ "$(wc -l < "$TEST_SSH_CALLS")" -eq 4 ]]
+
+: > "$TEST_DOCKER_CALLS"
+: > "$TEST_CURL_CALLS"
+: > "$TEST_SSH_CALLS"
+
+set +e
+HEALTH_TIMEOUT_SECONDS=1 TEST_SCENARIO=rollback-failure \
+  bash "${repository_root}/scripts/deploy-openpanel-production.sh" \
+  > "${test_directory}/rollback-failure-output" 2>&1
+rollback_failure_exit_code=$?
+set -e
+
+[[ "$rollback_failure_exit_code" -ne 0 ]]
+grep -q "Failed to deploy the rollback images" "${test_directory}/rollback-failure-output"
+grep -q "Automatic rollback failed and requires operator attention" \
+  "${test_directory}/rollback-failure-output"
+if grep -q "Rollback deployment is healthy" "${test_directory}/rollback-failure-output"; then
+  echo "Failed rollback was incorrectly reported as healthy" >&2
+  exit 1
+fi
 
 echo "Production deployment script tests passed"
