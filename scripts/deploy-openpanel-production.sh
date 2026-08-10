@@ -122,6 +122,7 @@ wait_for_release_health() {
     fi
 
     if [[ "$api_ready" == true && "$dashboard_ready" == true ]]; then
+      release_verified=true
       echo "Public API and dashboard are serving release ${GITHUB_SHA}"
       return 0
     fi
@@ -213,6 +214,5 @@ promote_images
 prefetch_images
 deploy_stack
 wait_for_release_health
-release_verified=true
 
 echo "OpenPanel production release ${GITHUB_SHA} is verified"
