@@ -5,12 +5,24 @@ import { mapKeys } from '@openpanel/validation';
 
 export const getChatModel = () => {
   switch (process.env.AI_MODEL) {
+    case 'gpt-5.6-sol':
+      return openai.responses('gpt-5.6-sol');
     case 'gpt-4o':
       return openai('gpt-4o');
     case 'claude-3-5':
       return anthropic('claude-3-5-haiku-latest');
     default:
       return openai('gpt-4.1-mini');
+  }
+};
+
+export const getChatReasoningEffort = (): 'low' | 'medium' | 'high' => {
+  switch (process.env.AI_REASONING_EFFORT) {
+    case 'low':
+    case 'high':
+      return process.env.AI_REASONING_EFFORT;
+    default:
+      return 'medium';
   }
 };
 
@@ -26,6 +38,7 @@ export const getChatSystemPrompt = ({
 - Today is ${new Date().toISOString()}
 - \`range\` should always be \`custom\`
   - if range is \`custom\`, make sure to have \`startDate\` and \`endDate\`
+  - use calendar dates in YYYY-MM-DD format; \`startDate\` is inclusive and \`endDate\` is exclusive. To include August 3, use an \`endDate\` of August 4.
 - Available intervals: ${Object.values(timeWindows)
     .map((t) => t.key)
     .join(', ')}
@@ -34,7 +47,11 @@ export const getChatSystemPrompt = ({
     .join(', ')}. If no match always use \`custom\` with a start and end date.
 - Pick corresponding chartType from \`${Object.keys(chartTypes).join(', ')}\`, match with your best effort.
 - Always add a name to the report.
-- Never do a summary!
+- When a report tool returns \`analysisData\`, write a concise analysis grounded only in those metrics and series. Include exact totals when requested, explain the most important trend or comparison, and mention when the returned series are truncated.
+- For broad questions about what changed, grew, declined, appeared, disappeared, or looks unusual across all tracked events, call \`getEventChanges\` directly. It compares every event name in ClickHouse and returns ranked, bounded summaries; do not call \`getAllEventNames\` first for those questions.
+- When \`getEventChanges\` returns \`changeAnalysis\`, always write the final answer. Lead with the total change, then the most consequential increases and decreases, distinguish absolute changes from percentage changes, call out new or disappeared events, and state the exact current and previous date ranges.
+- The report tool result renders the chart separately, so do not recreate the chart in Markdown and do not claim the values are unavailable when \`analysisData\` is present.
+- For a metric chart that counts event-segment series, use \`metric: "sum"\`. Use \`metric: "count"\` for unique-user counts.
 
 ### Formatting
 - Never generate images

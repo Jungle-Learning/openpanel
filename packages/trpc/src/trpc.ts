@@ -14,6 +14,7 @@ import {
 } from '@trpc-limiter/redis';
 import { getOrganizationAccess, getProjectAccess } from './access';
 import { TRPCAccessError } from './errors';
+import { runSingleFlight } from './single-flight';
 
 export const rateLimitMiddleware = ({
   max,
@@ -199,16 +200,31 @@ export const cacheMiddleware = (
         marker: middlewareMarker,
       };
     }
-    const result = await next();
+    const executeAndCache = async () => {
+      const result = await next();
 
-    // @ts-expect-error
-    if (result.data) {
-      getRedisCache().setJson(
-        key,
-        ttl,
-        // @ts-expect-error
-        result.data,
-      );
+      // @ts-expect-error
+      if (result.data) {
+        getRedisCache().setJson(
+          key,
+          ttl,
+          // @ts-expect-error
+          result.data,
+        );
+      }
+      return result;
+    };
+
+    if (process.env.NODE_ENV !== 'production') {
+      return executeAndCache();
     }
-    return result;
+
+    const result = await runSingleFlight(key, executeAndCache);
+    // The shared result was produced with the first request's context. The
+    // chart payload is cacheable across authorized users, but request-local
+    // cookies/session state must remain scoped to the current request.
+    return {
+      ...result,
+      ctx,
+    };
   });

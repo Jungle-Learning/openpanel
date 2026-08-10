@@ -6,12 +6,113 @@ import {
   TABLE_NAMES,
   ch,
   clix,
+  formatClickhouseDate,
+  getProjectByIdCached,
 } from '@openpanel/db';
 import { ChartEngine } from '@openpanel/db';
 import { getCache } from '@openpanel/redis';
-import { zReportInput } from '@openpanel/validation';
+import { type FinalChart, zReportInput } from '@openpanel/validation';
 import { tool } from 'ai';
 import { z } from 'zod';
+
+const MAX_AI_ANALYSIS_SERIES = 10;
+const MAX_AI_ANALYSIS_POINTS_PER_SERIES = 100;
+const MAX_AI_EVENT_CHANGE_SERIES = 12;
+
+function addUtcDays(day: string, days: number): string {
+  const value = new Date(`${day}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function normalizeAiReportDateRange<
+  T extends { startDate: string; endDate: string },
+>(report: T): T {
+  const startDay = report.startDate.slice(0, 10);
+  const endDay = report.endDate.slice(0, 10);
+  const isCalendarDate = /^\d{4}-\d{2}-\d{2}$/;
+  if (isCalendarDate.test(startDay) && isCalendarDate.test(endDay)) {
+    const endsAtEndOfDay = /T23:59(?::59(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/.test(
+      report.endDate,
+    );
+    return {
+      ...report,
+      startDate: startDay,
+      endDate:
+        startDay === endDay || endsAtEndOfDay
+          ? addUtcDays(endDay, 1)
+          : endDay,
+    };
+  }
+
+  return report;
+}
+
+type EventChangeRow = {
+  name: string;
+  current_count: number | string;
+  previous_count: number | string;
+};
+
+type EventChangeSummary = {
+  name: string;
+  current: number;
+  previous: number;
+  absoluteChange: number;
+  percentageChange: number | null;
+};
+
+function summarizeEventChange(row: EventChangeRow): EventChangeSummary {
+  const current = Number(row.current_count);
+  const previous = Number(row.previous_count);
+  const absoluteChange = current - previous;
+  return {
+    name: row.name,
+    current,
+    previous,
+    absoluteChange,
+    percentageChange:
+      previous === 0
+        ? null
+        : Math.round((absoluteChange / previous) * 1_000) / 10,
+  };
+}
+
+function normalizeAiReportMetric<
+  T extends {
+    chartType: string;
+    metric: string;
+    series: Array<{ type: string; segment?: string }>;
+  },
+>(report: T): T {
+  const isEventTotalMetric =
+    report.chartType === 'metric' &&
+    report.metric === 'count' &&
+    report.series.length > 0 &&
+    report.series.every(
+      (series) => series.type === 'event' && series.segment === 'event',
+    );
+
+  return isEventTotalMetric ? ({ ...report, metric: 'sum' } as T) : report;
+}
+
+function createAiChartAnalysisData(data: FinalChart) {
+  return {
+    metrics: data.metrics,
+    series: data.series
+      .slice(0, MAX_AI_ANALYSIS_SERIES)
+      .map((series) => ({
+        names: series.names,
+        metrics: series.metrics,
+        data: series.data.slice(0, MAX_AI_ANALYSIS_POINTS_PER_SERIES),
+      })),
+    truncation: {
+      totalSeries: data.series.length,
+      returnedSeries: Math.min(data.series.length, MAX_AI_ANALYSIS_SERIES),
+      maxPointsPerSeries: MAX_AI_ANALYSIS_POINTS_PER_SERIES,
+    },
+  };
+}
 
 export function getReport({
   projectId,
@@ -32,38 +133,226 @@ export function getReport({
       endDate: z.string().describe('The end date for the report'),
     }),
     execute: async (report) => {
+      const reportWithProjectId = {
+        ...normalizeAiReportMetric(normalizeAiReportDateRange(report)),
+        projectId,
+      };
+
+      try {
+        const data = await ChartEngine.execute(reportWithProjectId);
+        return {
+          type: 'report',
+          report: reportWithProjectId,
+          analysisData: createAiChartAnalysisData(data),
+        };
+      } catch {
+        return {
+          type: 'report',
+          report: reportWithProjectId,
+          analysisDataError:
+            'The chart query could not be executed for written analysis.',
+        };
+      }
+    },
+  });
+}
+
+export function getEventChanges({
+  projectId,
+}: {
+  projectId: string;
+}) {
+  return tool({
+    description:
+      'Compare every tracked event name across two equal periods, rank the most meaningful changes, and return a chart of the largest absolute movers. Use this for broad questions about what changed, grew, declined, appeared, disappeared, or looks unusual across the product. Do not call getAllEventNames first.',
+    parameters: z.object({
+      startDate: z
+        .string()
+        .describe('Inclusive start of the current comparison period.'),
+      endDate: z
+        .string()
+        .describe('Exclusive end of the current comparison period.'),
+      limit: z
+        .number()
+        .min(3)
+        .max(MAX_AI_EVENT_CHANGE_SERIES)
+        .default(8)
+        .describe('How many of the largest absolute movers to chart.'),
+    }),
+    execute: async (input) => {
+      const normalizedRange = normalizeAiReportDateRange({
+        startDate: input.startDate,
+        endDate: input.endDate,
+      });
+      const currentStart = new Date(`${normalizedRange.startDate}T00:00:00Z`);
+      const currentEnd = new Date(`${normalizedRange.endDate}T00:00:00Z`);
+      const durationMilliseconds = currentEnd.getTime() - currentStart.getTime();
+      if (
+        !Number.isFinite(durationMilliseconds) ||
+        durationMilliseconds <= 0 ||
+        durationMilliseconds > 366 * 24 * 60 * 60 * 1_000
+      ) {
+        throw new Error(
+          'Event-change comparisons require a valid period of 1 to 366 days.',
+        );
+      }
+
+      const previousStart = new Date(
+        currentStart.getTime() - durationMilliseconds,
+      );
+      const project = await getProjectByIdCached(projectId);
+      const timezone = project?.timezone || 'UTC';
+      const currentStartValue = formatClickhouseDate(currentStart);
+      const currentEndValue = formatClickhouseDate(currentEnd);
+      const previousStartValue = formatClickhouseDate(previousStart);
+
+      const queryResult = await ch.query({
+        query: `
+          SELECT
+            name,
+            countIf(created_at >= toDateTime({currentStart:String}) AND created_at < toDateTime({currentEnd:String})) AS current_count,
+            countIf(created_at >= toDateTime({previousStart:String}) AND created_at < toDateTime({currentStart:String})) AS previous_count
+          FROM ${TABLE_NAMES.events}
+          WHERE project_id = {projectId:String}
+            AND created_at >= toDateTime({previousStart:String})
+            AND created_at < toDateTime({currentEnd:String})
+          GROUP BY name
+          HAVING current_count > 0 OR previous_count > 0
+        `,
+        query_params: {
+          projectId,
+          currentStart: currentStartValue,
+          currentEnd: currentEndValue,
+          previousStart: previousStartValue,
+        },
+        clickhouse_settings: {
+          session_timezone: timezone,
+        },
+        format: 'JSONEachRow',
+      });
+      const changes = ((await queryResult.json()) as EventChangeRow[]).map(
+        summarizeEventChange,
+      );
+      const minimumMeaningfulVolume = 20;
+      const meaningfulChanges = changes.filter(
+        (change) => change.current + change.previous >= minimumMeaningfulVolume,
+      );
+      const largestMovers = [...meaningfulChanges]
+        .sort(
+          (left, right) =>
+            Math.abs(right.absoluteChange) - Math.abs(left.absoluteChange),
+        )
+        .slice(0, input.limit);
+      const topIncreases = [...meaningfulChanges]
+        .filter((change) => change.absoluteChange > 0)
+        .sort((left, right) => right.absoluteChange - left.absoluteChange)
+        .slice(0, 10);
+      const topDecreases = [...meaningfulChanges]
+        .filter((change) => change.absoluteChange < 0)
+        .sort((left, right) => left.absoluteChange - right.absoluteChange)
+        .slice(0, 10);
+      const largestRelativeChanges = [...meaningfulChanges]
+        .filter(
+          (change) =>
+            change.current > 0 &&
+            change.previous > 0 &&
+            Math.max(change.current, change.previous) >= 100,
+        )
+        .sort(
+          (left, right) =>
+            Math.abs(right.percentageChange ?? 0) -
+            Math.abs(left.percentageChange ?? 0),
+        )
+        .slice(0, 10);
+      const newEvents = [...changes]
+        .filter(
+          (change) =>
+            change.previous === 0 &&
+            change.current >= minimumMeaningfulVolume,
+        )
+        .sort((left, right) => right.current - left.current)
+        .slice(0, 10);
+      const disappearedEvents = [...changes]
+        .filter(
+          (change) =>
+            change.current === 0 &&
+            change.previous >= minimumMeaningfulVolume,
+        )
+        .sort((left, right) => right.previous - left.previous)
+        .slice(0, 10);
+
+      const report = {
+        projectId,
+        name: 'Largest event changes across the current and previous periods',
+        unit: 'events',
+        range: 'custom' as const,
+        metric: 'sum' as const,
+        series: largestMovers.map((change, index) => ({
+          id: `event-change-${index}`,
+          name: change.name,
+          type: 'event' as const,
+          segment: 'event' as const,
+          filters: [],
+          displayName: change.name,
+        })),
+        startDate: previousStart.toISOString().slice(0, 10),
+        endDate: normalizedRange.endDate,
+        previous: false,
+        chartType: 'linear' as const,
+        interval: 'day' as const,
+        lineType: 'linear' as const,
+        breakdowns: [],
+        limit: input.limit,
+        offset: 0,
+      };
+      const chartData = await ChartEngine.execute(report);
+      const currentTotal = changes.reduce(
+        (total, change) => total + change.current,
+        0,
+      );
+      const previousTotal = changes.reduce(
+        (total, change) => total + change.previous,
+        0,
+      );
+
       return {
         type: 'report',
-        report: {
-          ...report,
-          projectId,
+        report,
+        changeAnalysis: {
+          timezone,
+          currentPeriod: {
+            startDate: normalizedRange.startDate,
+            endDateExclusive: normalizedRange.endDate,
+          },
+          previousPeriod: {
+            startDate: previousStart.toISOString().slice(0, 10),
+            endDateExclusive: normalizedRange.startDate,
+          },
+          eventsCompared: changes.length,
+          totals: {
+            current: currentTotal,
+            previous: previousTotal,
+            absoluteChange: currentTotal - previousTotal,
+            percentageChange:
+              previousTotal === 0
+                ? null
+                : Math.round(
+                    ((currentTotal - previousTotal) / previousTotal) * 1_000,
+                  ) / 10,
+          },
+          topIncreases,
+          topDecreases,
+          largestRelativeChanges,
+          newEvents,
+          disappearedEvents,
+          selectionNotes: {
+            queriedAllEventNames: true,
+            minimumVolumeForRankedLists: minimumMeaningfulVolume,
+            chartedSeries: largestMovers.map((change) => change.name),
+          },
         },
+        analysisData: createAiChartAnalysisData(chartData),
       };
-      //     try {
-      //       const data = await getChart({
-      //         ...report,
-      //         projectId,
-      //       });
-
-      //       return {
-      //         type: 'report',
-      //         data: `Avg: ${data.metrics.average}, Min: ${data.metrics.min}, Max: ${data.metrics.max}, Sum: ${data.metrics.sum}
-      // X-Axis: ${data.series[0]?.data.map((i) => i.date).join(',')}
-      // Series:
-      // ${data.series
-      //   .slice(0, 5)
-      //   .map((item) => {
-      //     return `- ${item.names.join(' ')} | Sum: ${item.metrics.sum} | Avg: ${item.metrics.average} | Min: ${item.metrics.min} | Max: ${item.metrics.max} | Data: ${item.data.map((i) => i.count).join(',')}`;
-      //   })
-      //   .join('\n')}
-      // `,
-      //         report,
-      //       };
-      //     } catch (error) {
-      //       return {
-      //         error: 'Failed to generate report',
-      //       };
-      //     }
     },
   });
 }
@@ -84,7 +373,7 @@ export function getConversionReport({
         type: 'report',
         // data: await conversionService.getConversion(report),
         report: {
-          ...report,
+          ...normalizeAiReportDateRange(report),
           projectId,
           chartType: 'conversion',
         },
@@ -109,7 +398,7 @@ export function getFunnelReport({
         type: 'report',
         // data: await funnelService.getFunnel(report),
         report: {
-          ...report,
+          ...normalizeAiReportDateRange(report),
           projectId,
           chartType: 'funnel',
         },

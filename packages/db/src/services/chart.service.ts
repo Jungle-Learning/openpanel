@@ -11,6 +11,15 @@ import type {
 import { TABLE_NAMES, formatClickhouseDate } from '../clickhouse/client';
 import { createSqlBuilder } from '../sql-builder';
 
+const materializedEventPropertyColumns: Record<string, string> = {
+  'properties.aiGeneratedFollowUpQuestionSelectedText':
+    '_property_ai_generated_follow_up_question_selected_text',
+  'properties.fixedFollowUpQuestionSelectedText':
+    '_property_fixed_follow_up_question_selected_text',
+  'properties.platform': '_property_platform',
+  'properties.whereDidUserComeFrom': '_property_where_did_user_come_from',
+};
+
 export function transformPropertyKey(property: string) {
   const propertyPatterns = ['properties', 'profile.properties'];
   const match = propertyPatterns.find((pattern) =>
@@ -44,6 +53,11 @@ export function getSelectPropertyKey(property: string) {
   );
   if (!match) return property;
 
+  const materializedColumn = materializedEventPropertyColumns[property];
+  if (materializedColumn) {
+    return materializedColumn;
+  }
+
   if (property.includes('*')) {
     return `arrayMap(x -> trim(x), mapValues(mapExtractKeyLike(${match}, ${sqlstring.escape(
       transformPropertyKey(property),
@@ -63,6 +77,7 @@ export function getChartSql({
   limit,
   timezone,
   chartType,
+  metric,
 }: IGetChartDataInput & { timezone: string }) {
   const {
     sb,
@@ -187,29 +202,31 @@ export function getChartSql({
   }
 
   sb.select.count = 'count(*) as count';
+  const formattedStartDate = formatClickhouseDate(startDate);
+  const formattedEndDate = formatClickhouseDate(endDate);
   switch (interval) {
     case 'minute': {
-      sb.fill = `FROM toStartOfMinute(toDateTime('${startDate}')) TO toStartOfMinute(toDateTime('${endDate}')) STEP toIntervalMinute(1)`;
+      sb.fill = `FROM toStartOfMinute(toDateTime(${sqlstring.escape(formattedStartDate)})) TO toStartOfMinute(toDateTime(${sqlstring.escape(formattedEndDate)})) STEP toIntervalMinute(1)`;
       sb.select.date = 'toStartOfMinute(created_at) as date';
       break;
     }
     case 'hour': {
-      sb.fill = `FROM toStartOfHour(toDateTime('${startDate}')) TO toStartOfHour(toDateTime('${endDate}')) STEP toIntervalHour(1)`;
+      sb.fill = `FROM toStartOfHour(toDateTime(${sqlstring.escape(formattedStartDate)})) TO toStartOfHour(toDateTime(${sqlstring.escape(formattedEndDate)})) STEP toIntervalHour(1)`;
       sb.select.date = 'toStartOfHour(created_at) as date';
       break;
     }
     case 'day': {
-      sb.fill = `FROM toStartOfDay(toDateTime('${startDate}')) TO toStartOfDay(toDateTime('${endDate}')) STEP toIntervalDay(1)`;
+      sb.fill = `FROM toStartOfDay(toDateTime(${sqlstring.escape(formattedStartDate)})) TO toStartOfDay(toDateTime(${sqlstring.escape(formattedEndDate)})) STEP toIntervalDay(1)`;
       sb.select.date = 'toStartOfDay(created_at) as date';
       break;
     }
     case 'week': {
-      sb.fill = `FROM toStartOfWeek(toDateTime('${startDate}'), 1, '${timezone}') TO toStartOfWeek(toDateTime('${endDate}'), 1, '${timezone}') STEP toIntervalWeek(1)`;
+      sb.fill = `FROM toStartOfWeek(toDateTime(${sqlstring.escape(formattedStartDate)}), 1, ${sqlstring.escape(timezone)}) TO toStartOfWeek(toDateTime(${sqlstring.escape(formattedEndDate)}), 1, ${sqlstring.escape(timezone)}) STEP toIntervalWeek(1)`;
       sb.select.date = `toStartOfWeek(created_at, 1, '${timezone}') as date`;
       break;
     }
     case 'month': {
-      sb.fill = `FROM toStartOfMonth(toDateTime('${startDate}'), '${timezone}') TO toStartOfMonth(toDateTime('${endDate}'), '${timezone}') STEP toIntervalMonth(1)`;
+      sb.fill = `FROM toStartOfMonth(toDateTime(${sqlstring.escape(formattedStartDate)}), ${sqlstring.escape(timezone)}) TO toStartOfMonth(toDateTime(${sqlstring.escape(formattedEndDate)}), ${sqlstring.escape(timezone)}) STEP toIntervalMonth(1)`;
       sb.select.date = `toStartOfMonth(created_at, '${timezone}') as date`;
       break;
     }
@@ -302,42 +319,51 @@ export function getChartSql({
     return sql;
   }
 
-  // Note: The profile CTE (if it exists) is available in subqueries, so we can reference it directly
-  if (breakdowns.length > 0) {
-    // Match breakdown properties in subquery with outer query's grouped values
-    // Since outer query groups by label_X, we reference those in the correlation
-    const breakdownMatches = breakdowns
-      .map((b, index) => {
-        const propertyKey = getSelectPropertyKey(b.name);
-        // Correlate: match the property expression with outer query's label_X value
-        // ClickHouse allows referencing outer query columns in correlated subqueries
-        return `${propertyKey} = label_${index + 1}`;
-      })
+  // Only count metrics render the all-period unique-user total. Sum, average,
+  // min, and max metrics are derived from the time buckets, so scanning the
+  // event range again for uniq(profile_id) is unused work. This matters for
+  // dashboards: every saved chart is executed independently.
+  const needsTotalUniqueCount = metric == null || metric === 'count';
+  if (needsTotalUniqueCount && breakdowns.length > 0) {
+    // Pre-aggregate unique users once per breakdown and join those totals to
+    // the bucketed result. The previous correlated subquery was expanded in
+    // the subquery's scope by ClickHouse and repeatedly rescanned the event
+    // range for each output bucket.
+    const uniqueCountSelects = breakdowns.map((breakdown, index) => {
+      const propertyKey = getSelectPropertyKey(breakdown.name);
+      return `${propertyKey} as _unique_label_${index + 1}`;
+    });
+    const uniqueCountLabels = breakdowns.map(
+      (_, index) => `_unique_label_${index + 1}`,
+    );
+
+    addCte(
+      '_unique_counts',
+      `SELECT ${uniqueCountSelects.join(', ')}, uniq(profile_id) as total_count
+       FROM ${TABLE_NAMES.events} e
+       ${profilesJoinRef ? `${profilesJoinRef} ` : ''}${getWhereWithoutBar()}
+       GROUP BY ${uniqueCountLabels.join(', ')}`,
+    );
+
+    const uniqueCountJoinConditions = breakdowns
+      .map(
+        (breakdown, index) =>
+          `_unique_counts._unique_label_${index + 1} = ${getSelectPropertyKey(breakdown.name)}`,
+      )
       .join(' AND ');
-
-    // Build WHERE clause for subquery - replace table alias and keep profile CTE reference
-    const subqueryWhere = getWhereWithoutBar()
-      .replace(/\be\./g, 'e2.')
-      .replace(/\bprofile\./g, 'profile.');
-
-    sb.select.total_unique_count = `(
-        SELECT uniq(profile_id)
-        FROM ${TABLE_NAMES.events} e2
-        ${profilesJoinRef ? `${profilesJoinRef} ` : ''}${subqueryWhere}
-        AND ${breakdownMatches}
-      ) as total_count`;
-  } else {
-    // No breakdowns: calculate unique count across all data
-    // Build WHERE clause for subquery - replace table alias and keep profile CTE reference
-    const subqueryWhere = getWhereWithoutBar()
-      .replace(/\be\./g, 'e2.')
-      .replace(/\bprofile\./g, 'profile.');
-
-    sb.select.total_unique_count = `(
-        SELECT uniq(profile_id)
-        FROM ${TABLE_NAMES.events} e2
-        ${profilesJoinRef ? `${profilesJoinRef} ` : ''}${subqueryWhere}
-      ) as total_count`;
+    sb.joins.unique_counts =
+      `LEFT ANY JOIN _unique_counts ON ${uniqueCountJoinConditions}`;
+    sb.select.total_unique_count =
+      'any(_unique_counts.total_count) as total_count';
+  } else if (needsTotalUniqueCount) {
+    addCte(
+      '_unique_count',
+      `SELECT uniq(profile_id) as total_count
+       FROM ${TABLE_NAMES.events} e
+       ${profilesJoinRef ? `${profilesJoinRef} ` : ''}${getWhereWithoutBar()}`,
+    );
+    sb.select.total_unique_count =
+      '(SELECT total_count FROM _unique_count) as total_count';
   }
 
   const sql = `${getWith()}${getSelect()} ${getFrom()} ${getJoins()} ${getWhere()} ${getGroupBy()} ${getOrderBy()} ${getFill()}`;

@@ -1,7 +1,12 @@
-import { getChatModel, getChatSystemPrompt } from '@/utils/ai';
+import {
+  getChatModel,
+  getChatReasoningEffort,
+  getChatSystemPrompt,
+} from '@/utils/ai';
 import {
   getAllEventNames,
   getConversionReport,
+  getEventChanges,
   getFunnelReport,
   getProfile,
   getProfiles,
@@ -73,13 +78,22 @@ export async function chat(
   try {
     const result = streamText({
       model: getChatModel(),
+      providerOptions: {
+        openai: {
+          reasoningEffort: getChatReasoningEffort(),
+          strictSchemas: false,
+        },
+      },
       messages: messages.slice(-4),
-      maxSteps: 2,
+      maxSteps: 6,
       tools: {
         getAllEventNames: getAllEventNames({
           projectId,
         }),
         getReport: getReport({
+          projectId,
+        }),
+        getEventChanges: getEventChanges({
           projectId,
         }),
         getConversionReport: getConversionReport({
