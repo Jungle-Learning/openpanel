@@ -14,6 +14,7 @@ import {
 } from '@trpc-limiter/redis';
 import { getOrganizationAccess, getProjectAccess } from './access';
 import { TRPCAccessError } from './errors';
+import { runSingleFlight } from './single-flight';
 
 export const rateLimitMiddleware = ({
   max,
@@ -205,16 +206,30 @@ export const cacheMiddleware = (
         marker: middlewareMarker,
       };
     }
-    const result = await next();
+    const executeAndCache = async () => {
+      const result = await next();
 
-    // @ts-expect-error
-    if (result.data) {
-      getRedisCache().setJson(
-        key,
-        ttl,
-        // @ts-expect-error
-        result.data,
-      );
+      // @ts-expect-error
+      if (result.data) {
+        getRedisCache().setJson(
+          key,
+          ttl,
+          // @ts-expect-error
+          result.data,
+        );
+      }
+      return result;
+    };
+
+    if (process.env.NODE_ENV !== 'production') {
+      return executeAndCache();
     }
-    return result;
+
+    const result = await runSingleFlight(key, executeAndCache);
+    // The first request owns the shared result's context. Keep only the
+    // cacheable payload shared and restore this request's cookies/session.
+    return {
+      ...result,
+      ctx,
+    };
   });
