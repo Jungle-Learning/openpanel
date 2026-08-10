@@ -77,6 +77,18 @@ const EVENT_UTM_BARE_COLUMNS = new Set<string>([
   'utm_content',
 ]);
 
+// Jungle's largest dashboard breakdowns use these event properties. Keeping
+// their ClickHouse column names here lets the query builder use the
+// projection added by code migration 18 without changing saved reports.
+const MATERIALIZED_EVENT_PROPERTY_COLUMNS: Record<string, string> = {
+  'properties.aiGeneratedFollowUpQuestionSelectedText':
+    '_property_ai_generated_follow_up_question_selected_text',
+  'properties.fixedFollowUpQuestionSelectedText':
+    '_property_fixed_follow_up_question_selected_text',
+  'properties.platform': '_property_platform',
+  'properties.whereDidUserComeFrom': '_property_where_did_user_come_from',
+};
+
 // Normalize an incoming field name into its canonical form. Returns a string
 // suitable for `getSelectPropertyKey` / `getEventFiltersWhereClause` — i.e.
 // either a top-level column name (`referrer_name`), a `properties.foo` /
@@ -370,6 +382,11 @@ export function getSelectPropertyKey(
     ? `${eventsAlias}.`
     : '';
 
+  const materializedColumn = MATERIALIZED_EVENT_PROPERTY_COLUMNS[property];
+  if (match === 'properties' && materializedColumn) {
+    return `${aliasPrefix}${materializedColumn}`;
+  }
+
   if (property.includes('*')) {
     return `arrayMap(x -> trim(x), mapValues(mapExtractKeyLike(${aliasPrefix}${match}, ${sqlstring.escape(
       transformPropertyKey(property)
@@ -387,6 +404,7 @@ export async function getChartSql({
   endDate,
   projectId,
   timezone,
+  metric,
 }: IGetChartDataInput & { timezone: string }) {
   const {
     sb,
@@ -738,7 +756,12 @@ export async function getChartSql({
     ? `INNER JOIN (${buildAllCohortsMembershipQuery(projectId)}) AS _all_cohorts ON _all_cohorts.profile_id = e.profile_id `
     : '';
 
-  if (breakdowns.length > 0) {
+  // Only count reports render the all-period unique-user total. Other report
+  // metrics are derived from the time buckets, so their unique-user scan is
+  // unused work and was the dominant cost on large dashboards.
+  const needsTotalUniqueCount = metric == null || metric === 'count';
+
+  if (needsTotalUniqueCount && breakdowns.length > 0) {
     // Pre-compute unique counts per breakdown group in a CTE, then JOIN it.
     // We can't use a correlated subquery because:
     // 1. ClickHouse expands label_X aliases to their underlying expressions,
@@ -792,7 +815,7 @@ export async function getChartSql({
 
     sb.joins.unique_counts = `LEFT ANY JOIN _uc ON ${ucJoinConditions}`;
     sb.select.total_unique_count = 'any(_uc.total_count) as total_count';
-  } else {
+  } else if (needsTotalUniqueCount) {
     const ucWhere = getWhereWithoutBar();
 
     addCte(

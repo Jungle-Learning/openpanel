@@ -379,7 +379,10 @@ async function deleteFixtures(client: ChClient, projectId: string) {
       query: `DELETE FROM openpanel.profiles WHERE project_id = '${projectId}'`,
     }),
     client.command({
-      query: `DELETE FROM openpanel.events WHERE project_id = '${projectId}'`,
+      // Migration 18 adds an events projection, which is incompatible with
+      // lightweight DELETE on the ClickHouse version used by CI.
+      query: `ALTER TABLE openpanel.events DELETE WHERE project_id = '${projectId}'`,
+      clickhouse_settings: { mutations_sync: '1' },
     }),
     client.command({
       query: `DELETE FROM openpanel.sessions WHERE project_id = '${projectId}'`,

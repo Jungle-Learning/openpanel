@@ -54,8 +54,12 @@ export async function deleteFromClickhouse(projectIds: string[]) {
   ];
 
   for (const table of tables) {
-    // If materialized view, use ALTER TABLE since DELETE is not supported
-    const query = table.endsWith('_mv')
+    // Materialized views do not support lightweight DELETE. ClickHouse also
+    // rejects it for tables with projections, so events must use a mutation
+    // after code migration 18 adds the chart projection.
+    const requiresAlterMutation =
+      table.endsWith('_mv') || table === TABLE_NAMES.events;
+    const query = requiresAlterMutation
       ? `ALTER TABLE ${getReplicatedTableName(table)} DELETE WHERE ${where};`
       : `DELETE FROM ${getReplicatedTableName(table)} WHERE ${where};`;
 

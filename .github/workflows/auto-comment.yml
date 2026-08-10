@@ -1,59 +1,69 @@
-name: Auto comment on PR events
+name: Trigger Bugbot review
 
 on:
-  workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
+concurrency:
+  group: bugbot-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
 jobs:
-  comment:
+  trigger:
+    name: Request review
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
     steps:
-      - name: Post comment on PR
-        uses: actions/github-script@v7
+      - name: Comment Bugbot command
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         with:
           github-token: ${{ secrets.PR_COMMENT_TOKEN }}
           script: |
-            const pr = context.payload.pull_request;
-
-            // For manual trigger, there's no PR context
-            if (!pr) {
-              console.log('No PR context available (manual trigger?)');
+            const pullRequest = context.payload.pull_request;
+            if (!pullRequest) {
+              core.setFailed('This workflow requires a pull_request event.');
               return;
             }
 
-            const sha = (pr.head && pr.head.sha ? pr.head.sha : context.sha).slice(0, 7);
-            const marker = '<!-- auto-comment:do-not-remove -->';
-            const body = `bugbot run`;
+            const commandAuthor =
+              (await github.rest.users.getAuthenticated()).data.login;
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pullRequest.number,
+                per_page: 100,
+              },
+            );
+            const priorCommands = comments.filter(
+              (comment) =>
+                comment.user?.login === commandAuthor &&
+                comment.body?.trim() === 'bugbot run',
+            );
 
-            // Find existing comment with our marker
-            const { data: comments } = await github.rest.issues.listComments({
+            // Recreating the command produces a new issue_comment event. Merely
+            // editing one old comment does not reliably trigger another review.
+            for (const comment of priorCommands) {
+              await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: comment.id,
+              });
+            }
+
+            await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: pr.number,
-              per_page: 100,
+              issue_number: pullRequest.number,
+              body: 'bugbot run',
             });
-            const existing = comments.find(c => c.body && c.body.includes(marker));
 
-            if (existing) {
-              // Update existing comment
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-              console.log(`Updated comment ${existing.id}`);
-            } else {
-              // Create new comment
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                body,
-              });
-              console.log('Created new comment');
-            }
+            core.notice(
+              `Requested a Bugbot review of ${pullRequest.head.sha.slice(0, 7)}.`,
+            );
