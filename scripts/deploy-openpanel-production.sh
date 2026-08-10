@@ -158,14 +158,15 @@ rollback_release() {
   rollback_in_progress=true
   echo "Release verification failed; rolling back production images" >&2
 
-  if restore_previous_images && prefetch_images; then
-    echo "Previous production images restored from the registry"
-  else
-    echo "Registry rollback was unavailable; using the local rollback snapshot" >&2
-    if ! restore_local_images; then
-      echo "Failed to restore the local rollback snapshot" >&2
-      return 1
-    fi
+  if ! restore_previous_images; then
+    echo "Failed to restore one or more previous registry manifests" >&2
+  fi
+
+  # Prefetch captured this snapshot before the failed release was deployed.
+  # Do not prefetch again here or the helper would replace it with failed images.
+  if ! restore_local_images; then
+    echo "Failed to restore the local rollback snapshot" >&2
+    return 1
   fi
 
   if ! deploy_stack; then

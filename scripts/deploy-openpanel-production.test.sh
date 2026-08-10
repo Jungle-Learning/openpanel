@@ -152,6 +152,8 @@ set -e
 grep -q "Rollback deployment is healthy" "${test_directory}/rollback-output"
 [[ "$(grep -c -- '--tag .*:production' "$TEST_DOCKER_CALLS")" -eq 6 ]]
 [[ "$(wc -l < "$TEST_SSH_CALLS")" -eq 4 ]]
+[[ "$(grep -c '^prefetch ' "$TEST_SSH_CALLS")" -eq 1 ]]
+[[ "$(grep -c '^restore-local ' "$TEST_SSH_CALLS")" -eq 1 ]]
 
 : > "$TEST_DOCKER_CALLS"
 : > "$TEST_CURL_CALLS"
