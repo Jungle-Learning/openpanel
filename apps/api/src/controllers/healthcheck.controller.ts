@@ -57,6 +57,7 @@ export async function healthcheck(
 
   return reply.status(status).send({
     ready: status === 200,
+    releaseSha: process.env.OPENPANEL_RELEASE_SHA ?? null,
     ...dependencies,
     failedDependencies,
     workingDependencies,

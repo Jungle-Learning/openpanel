@@ -29,6 +29,13 @@ on:
       - "**/.eslintignore"
       - "**/.prettierignore"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: openpanel-release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   repo_owner: "jungle-learning"
 
@@ -75,6 +82,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate production deployment script
+        run: |
+          bash -n scripts/deploy-openpanel-production.sh
+          bash -n scripts/prefetch-openpanel-production-images.sh
+          bash scripts/deploy-openpanel-production.test.sh
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -86,10 +99,10 @@ jobs:
       - name: Get pnpm store directory
         shell: bash
         run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+          echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
 
       - name: Setup pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -141,7 +154,7 @@ jobs:
       - name: Prepare platform pair
         run: |
           platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -168,6 +181,7 @@ jobs:
           outputs: type=image,name=ghcr.io/${{ env.repo_owner }}/api,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy
+            OPENPANEL_RELEASE_SHA=${{ github.sha }}
 
       - name: Export digest
         run: |
@@ -203,10 +217,8 @@ jobs:
       - name: Generate tags
         id: tags
         run: |
-          BRANCH_NAME=$(echo "${{ github.ref_name }}" | sed 's/\//-/g')
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-4)
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          branch_name="${GITHUB_REF_NAME//\//-}"
+          printf 'image_tag=%s-%s\n' "${branch_name:0:80}" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -221,9 +233,13 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
+          digest_references=()
+          for digest_file in *; do
+            digest_references+=("ghcr.io/${{ env.repo_owner }}/api@sha256:${digest_file}")
+          done
           docker buildx imagetools create \
-            -t ghcr.io/${{ env.repo_owner }}/api:${{ steps.tags.outputs.branch_name }}-${{ steps.tags.outputs.short_sha }} \
-            $(printf 'ghcr.io/${{ env.repo_owner }}/api@sha256:%s ' *)
+            -t ghcr.io/${{ env.repo_owner }}/api:${{ steps.tags.outputs.image_tag }} \
+            "${digest_references[@]}"
 
       - name: Create/Update API tag
         if: github.ref == 'refs/heads/main'
@@ -260,7 +276,7 @@ jobs:
       - name: Prepare platform pair
         run: |
           platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -287,6 +303,7 @@ jobs:
           outputs: type=image,name=ghcr.io/${{ env.repo_owner }}/worker,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy
+            OPENPANEL_RELEASE_SHA=${{ github.sha }}
 
       - name: Export digest
         run: |
@@ -322,10 +339,8 @@ jobs:
       - name: Generate tags
         id: tags
         run: |
-          BRANCH_NAME=$(echo "${{ github.ref_name }}" | sed 's/\//-/g')
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-4)
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          branch_name="${GITHUB_REF_NAME//\//-}"
+          printf 'image_tag=%s-%s\n' "${branch_name:0:80}" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -340,9 +355,13 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
+          digest_references=()
+          for digest_file in *; do
+            digest_references+=("ghcr.io/${{ env.repo_owner }}/worker@sha256:${digest_file}")
+          done
           docker buildx imagetools create \
-            -t ghcr.io/${{ env.repo_owner }}/worker:${{ steps.tags.outputs.branch_name }}-${{ steps.tags.outputs.short_sha }} \
-            $(printf 'ghcr.io/${{ env.repo_owner }}/worker@sha256:%s ' *)
+            -t ghcr.io/${{ env.repo_owner }}/worker:${{ steps.tags.outputs.image_tag }} \
+            "${digest_references[@]}"
 
       - name: Create/Update Worker tag
         if: github.ref == 'refs/heads/main'
@@ -379,7 +398,7 @@ jobs:
       - name: Prepare platform pair
         run: |
           platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -406,6 +425,7 @@ jobs:
           outputs: type=image,name=ghcr.io/${{ env.repo_owner }}/dashboard,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             NO_CLOUDFLARE=1
+            OPENPANEL_RELEASE_SHA=${{ github.sha }}
 
       - name: Export digest
         run: |
@@ -441,10 +461,8 @@ jobs:
       - name: Generate tags
         id: tags
         run: |
-          BRANCH_NAME=$(echo "${{ github.ref_name }}" | sed 's/\//-/g')
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-4)
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          branch_name="${GITHUB_REF_NAME//\//-}"
+          printf 'image_tag=%s-%s\n' "${branch_name:0:80}" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -459,9 +477,13 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
+          digest_references=()
+          for digest_file in *; do
+            digest_references+=("ghcr.io/${{ env.repo_owner }}/dashboard@sha256:${digest_file}")
+          done
           docker buildx imagetools create \
-            -t ghcr.io/${{ env.repo_owner }}/dashboard:${{ steps.tags.outputs.branch_name }}-${{ steps.tags.outputs.short_sha }} \
-            $(printf 'ghcr.io/${{ env.repo_owner }}/dashboard@sha256:%s ' *)
+            -t ghcr.io/${{ env.repo_owner }}/dashboard:${{ steps.tags.outputs.image_tag }} \
+            "${digest_references[@]}"
 
       - name: Create/Update Dashboard tag
         if: github.ref == 'refs/heads/main'
@@ -479,3 +501,50 @@ jobs:
           # Push tag to remote
           git push origin "dashboard" --force
           echo "Pushed tag: dashboard"
+
+  deploy-production:
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    needs:
+      - merge-api
+      - merge-worker
+      - merge-dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure production image prefetch access
+        env:
+          OPENPANEL_PREFETCH_KNOWN_HOSTS: ${{ secrets.OPENPANEL_PREFETCH_KNOWN_HOSTS }}
+          OPENPANEL_PREFETCH_SSH_PRIVATE_KEY: ${{ secrets.OPENPANEL_PREFETCH_SSH_PRIVATE_KEY }}
+        run: |
+          install -m 600 /dev/null "${RUNNER_TEMP}/openpanel-prefetch-key"
+          printf '%s\n' "$OPENPANEL_PREFETCH_SSH_PRIVATE_KEY" > "${RUNNER_TEMP}/openpanel-prefetch-key"
+          install -m 600 /dev/null "${RUNNER_TEMP}/openpanel-known-hosts"
+          printf '%s\n' "$OPENPANEL_PREFETCH_KNOWN_HOSTS" > "${RUNNER_TEMP}/openpanel-known-hosts"
+
+      - name: Deploy and verify production
+        run: bash scripts/deploy-openpanel-production.sh
+        env:
+          GHCR_PULL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_PULL_USERNAME: ${{ github.actor }}
+          GITHUB_SHA: ${{ github.sha }}
+          OPENPANEL_API_HEALTH_URL: https://op-api.jungleai.com/healthcheck
+          OPENPANEL_DASHBOARD_HEALTH_URL: https://analytics.jungleai.com/api/healthcheck
+          OPENPANEL_KNOWN_HOSTS_PATH: ${{ runner.temp }}/openpanel-known-hosts
+          OPENPANEL_PREFETCH_HOST: ${{ vars.OPENPANEL_PREFETCH_HOST }}
+          OPENPANEL_PREFETCH_SSH_KEY_PATH: ${{ runner.temp }}/openpanel-prefetch-key
+          OPENPANEL_PREFETCH_USER: ${{ vars.OPENPANEL_PREFETCH_USER }}
