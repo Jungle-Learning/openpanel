@@ -85,6 +85,41 @@ restore_local_rollback_images() {
   echo "OpenPanel local rollback images restored"
 }
 
+authenticate_with_ghcr() {
+  local ghcr_token ghcr_username
+
+  IFS= read -r ghcr_token
+  if [[ -z "$ghcr_token" ]]; then
+    echo "A GitHub Container Registry token is required" >&2
+    exit 1
+  fi
+
+  IFS= read -r ghcr_username
+  if [[ ! "$ghcr_username" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*(\[bot\])?$ ]]; then
+    echo "A valid GitHub Container Registry username is required" >&2
+    exit 1
+  fi
+
+  docker_config_directory="$(mktemp -d /tmp/openpanel-docker-config.XXXXXX)"
+  chmod 0700 "$docker_config_directory"
+  export DOCKER_CONFIG="$docker_config_directory"
+  printf '%s' "$ghcr_token" \
+    | docker login ghcr.io --username "$ghcr_username" --password-stdin > /dev/null
+  unset ghcr_token
+  unset ghcr_username
+}
+
+publish_local_production_images() {
+  local service_name
+
+  authenticate_with_ghcr
+  for service_name in api worker dashboard; do
+    docker push --quiet "ghcr.io/jungle-learning/${service_name}:production"
+  done
+
+  echo "OpenPanel restored production images published"
+}
+
 validate_stack() {
   prepare_compose_environment
   docker compose "${compose_files[@]}" config --quiet
@@ -115,6 +150,11 @@ if [[ "$operation" == "restore-local" ]]; then
   exit 0
 fi
 
+if [[ "$operation" == "publish-local" ]]; then
+  publish_local_production_images
+  exit 0
+fi
+
 if [[ "$operation" == "validate" ]]; then
   validate_stack
   exit 0
@@ -130,27 +170,8 @@ if [[ "$operation" != "prefetch" ]]; then
   exit 1
 fi
 
-IFS= read -r ghcr_token
-if [[ -z "$ghcr_token" ]]; then
-  echo "A GitHub Container Registry token is required" >&2
-  exit 1
-fi
-
-IFS= read -r ghcr_username
-if [[ ! "$ghcr_username" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*(\[bot\])?$ ]]; then
-  echo "A valid GitHub Container Registry username is required" >&2
-  exit 1
-fi
-
 save_local_rollback_images
-
-docker_config_directory="$(mktemp -d /tmp/openpanel-docker-config.XXXXXX)"
-chmod 0700 "$docker_config_directory"
-export DOCKER_CONFIG="$docker_config_directory"
-printf '%s' "$ghcr_token" \
-  | docker login ghcr.io --username "$ghcr_username" --password-stdin > /dev/null
-unset ghcr_token
-unset ghcr_username
+authenticate_with_ghcr
 
 for service_name in api worker dashboard; do
   docker pull --quiet "ghcr.io/jungle-learning/${service_name}:production"

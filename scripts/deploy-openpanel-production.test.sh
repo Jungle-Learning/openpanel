@@ -74,7 +74,7 @@ cat > "${stub_directory}/ssh" <<'STUB'
 set -Eeuo pipefail
 
 IFS= read -r operation
-if [[ "$operation" == "prefetch" ]]; then
+if [[ "$operation" == "prefetch" || "$operation" == "publish-local" ]]; then
   IFS= read -r token
   [[ "$token" == "$GHCR_PULL_TOKEN" ]]
   IFS= read -r username
@@ -116,6 +116,13 @@ grep -q "images prefetched" "${test_directory}/prefetch-output"
 [[ "$(grep -c '^pull --quiet ghcr.io/jungle-learning/.*:production$' "$TEST_DOCKER_CALLS")" -eq 3 ]]
 : > "$TEST_DOCKER_CALLS"
 
+printf 'publish-local\n%s\n%s\n' "$GHCR_PULL_TOKEN" "$GHCR_PULL_USERNAME" \
+  | bash "${repository_root}/scripts/prefetch-openpanel-production-images.sh" \
+    > "${test_directory}/publish-output"
+grep -q "restored production images published" "${test_directory}/publish-output"
+[[ "$(grep -c '^push --quiet ghcr.io/jungle-learning/.*:production$' "$TEST_DOCKER_CALLS")" -eq 3 ]]
+: > "$TEST_DOCKER_CALLS"
+
 printf 'validate\n' \
   | bash "${repository_root}/scripts/prefetch-openpanel-production-images.sh" \
     > "${test_directory}/validate-output"
@@ -151,9 +158,10 @@ set -e
 [[ "$rollback_exit_code" -ne 0 ]]
 grep -q "Rollback deployment is healthy" "${test_directory}/rollback-output"
 [[ "$(grep -c -- '--tag .*:production' "$TEST_DOCKER_CALLS")" -eq 6 ]]
-[[ "$(wc -l < "$TEST_SSH_CALLS")" -eq 4 ]]
+[[ "$(wc -l < "$TEST_SSH_CALLS")" -eq 5 ]]
 [[ "$(grep -c '^prefetch ' "$TEST_SSH_CALLS")" -eq 1 ]]
 [[ "$(grep -c '^restore-local ' "$TEST_SSH_CALLS")" -eq 1 ]]
+[[ "$(grep -c '^publish-local ' "$TEST_SSH_CALLS")" -eq 1 ]]
 
 : > "$TEST_DOCKER_CALLS"
 : > "$TEST_CURL_CALLS"
