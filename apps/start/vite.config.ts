@@ -21,6 +21,19 @@ if (process.env.NITRO) {
     nitroV2Plugin({
       preset: 'node-server',
       compatibilityDate: '2025-10-21',
+      compressPublicAssets: {
+        brotli: true,
+        gzip: true,
+      },
+      routeRules: {
+        // Vite fingerprints every file in this directory, so cached assets stay
+        // valid across releases while repeat dashboard loads avoid re-downloading.
+        '/assets/**': {
+          headers: {
+            'cache-control': 'public, max-age=31536000, immutable',
+          },
+        },
+      },
     }),
   );
 } else {

@@ -96,6 +96,11 @@ restore_local_images() {
     | run_remote_operation
 }
 
+publish_local_images() {
+  printf 'publish-local\n%s\n%s\n' "$GHCR_PULL_TOKEN" "$GHCR_PULL_USERNAME" \
+    | run_remote_operation
+}
+
 deploy_stack() {
   printf 'deploy\n' \
     | run_remote_operation
@@ -182,6 +187,14 @@ rollback_release() {
 
   if ! curl --fail --silent --show-error "$OPENPANEL_DASHBOARD_HEALTH_URL" > /dev/null; then
     echo "Dashboard health check failed after rollback" >&2
+    return 1
+  fi
+
+  # The host snapshot is the exact release that was healthy before deployment.
+  # Publish it after recovery so the registry cannot retain a failed release,
+  # including on the first automated deployment when no prior manifest exists.
+  if ! publish_local_images; then
+    echo "Failed to publish the restored production images" >&2
     return 1
   fi
 
