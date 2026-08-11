@@ -181,6 +181,9 @@ function buildSession(
 
 async function insertFixtures(client: ChClient, projectId: string) {
   const now = new Date();
+  // Anchor relative fixtures at UTC noon so minute offsets cannot cross a day
+  // boundary when CI happens to start shortly after midnight.
+  now.setUTCHours(12, 0, 0, 0);
 
   await client.insert({
     table: 'openpanel.profiles',
