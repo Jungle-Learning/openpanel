@@ -160,6 +160,11 @@ deploy_stack() {
 }
 
 IFS= read -r operation
+if [[ "$operation" == "checksum" ]]; then
+  sha256sum "${BASH_SOURCE[0]}" | awk '{ print $1 }'
+  exit 0
+fi
+
 if [[ "$operation" == "restore-local" ]]; then
   restore_local_rollback_images
   exit 0

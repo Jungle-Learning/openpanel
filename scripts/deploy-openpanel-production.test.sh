@@ -93,21 +93,16 @@ cat > "${stub_directory}/ssh" <<'STUB'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-remote_command="${!#}"
-if [[ "$remote_command" == umask\ 077* ]]; then
-  tee "$TEST_UPLOADED_HELPER" > /dev/null
-  if [[ "$TEST_SCENARIO" == upload-mismatch ]]; then
-    printf '%064d  %s\n' 0 "$TEST_UPLOADED_HELPER"
-    exit 0
+IFS= read -r operation
+if [[ "$operation" == checksum ]]; then
+  if [[ "$TEST_SCENARIO" == checksum-mismatch ]]; then
+    printf '%064d\n' 0
+  else
+    shasum -a 256 "$TEST_REMOTE_HELPER" | awk '{ print $1 }'
   fi
-  sha256sum "$TEST_UPLOADED_HELPER"
   exit 0
 fi
 
-grep -q 'docker ps --all --quiet' "$TEST_UPLOADED_HELPER"
-grep -q 'candidate_created_at' "$TEST_UPLOADED_HELPER"
-
-IFS= read -r operation
 if [[ "$operation" == "prefetch" || "$operation" == "publish-local" ]]; then
   IFS= read -r token
   [[ "$token" == "$GHCR_PULL_TOKEN" ]]
@@ -140,23 +135,27 @@ export OPENPANEL_PREFETCH_USER="openpanel-deploy"
 export TEST_DOCKER_CALLS="${test_directory}/docker-calls"
 export TEST_CURL_CALLS="${test_directory}/curl-calls"
 export TEST_SSH_CALLS="${test_directory}/ssh-calls"
-export TEST_UPLOADED_HELPER="${test_directory}/uploaded-helper"
+export TEST_REMOTE_HELPER="${repository_root}/scripts/prefetch-openpanel-production-images.sh"
 
 touch "$OPENPANEL_KNOWN_HOSTS_PATH" "$OPENPANEL_PREFETCH_SSH_KEY_PATH"
 : > "$TEST_DOCKER_CALLS"
 : > "$TEST_CURL_CALLS"
 : > "$TEST_SSH_CALLS"
 
+expected_helper_checksum="$(shasum -a 256 "$TEST_REMOTE_HELPER" | awk '{ print $1 }')"
+actual_helper_checksum="$(printf 'checksum\n' | bash "$TEST_REMOTE_HELPER")"
+[[ "$actual_helper_checksum" == "$expected_helper_checksum" ]]
+
 set +e
-TEST_SCENARIO=upload-mismatch bash "${repository_root}/scripts/deploy-openpanel-production.sh" \
-  > "${test_directory}/upload-mismatch-output" 2>&1
-upload_mismatch_exit_code=$?
+TEST_SCENARIO=checksum-mismatch bash "${repository_root}/scripts/deploy-openpanel-production.sh" \
+  > "${test_directory}/checksum-mismatch-output" 2>&1
+checksum_mismatch_exit_code=$?
 set -e
 
-[[ "$upload_mismatch_exit_code" -ne 0 ]]
-grep -q "checksum did not match" "${test_directory}/upload-mismatch-output"
+[[ "$checksum_mismatch_exit_code" -ne 0 ]]
+grep -q "checksum did not match" "${test_directory}/checksum-mismatch-output"
 if grep -q -- '--tag .*:production' "$TEST_DOCKER_CALLS"; then
-  echo "Images were promoted before the remote helper checksum was verified" >&2
+  echo "Images were promoted before the forced helper checksum was verified" >&2
   exit 1
 fi
 : > "$TEST_DOCKER_CALLS"
