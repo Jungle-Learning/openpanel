@@ -23,7 +23,7 @@ if [[ "$*" == buildx\ imagetools\ inspect* ]]; then
 fi
 
 if [[ "$*" == ps\ --all\ --quiet* ]]; then
-  echo "container-id"
+  printf 'old-container-id\ncontainer-id\n'
   exit 0
 fi
 
@@ -32,12 +32,27 @@ if [[ "$*" == ps\ --quiet* ]]; then
   exit 1
 fi
 
-if [[ "$*" == inspect\ --format* ]]; then
+if [[ "$*" == "inspect --format {{.Created}} old-container-id" ]]; then
+  echo "2026-01-01T00:00:00Z"
+  exit 0
+fi
+
+if [[ "$*" == "inspect --format {{.Created}} container-id" ]]; then
+  echo "2026-08-12T00:00:00Z"
+  exit 0
+fi
+
+if [[ "$*" == "inspect --format {{.Image}} container-id" ]]; then
   echo "sha256:running-image"
   exit 0
 fi
 
-if [[ "$*" == "inspect container-id" ]]; then
+if [[ "$*" == "inspect --format {{.Image}} old-container-id" ]]; then
+  echo "Rollback snapshot selected an obsolete stopped container" >&2
+  exit 1
+fi
+
+if [[ "$*" == "inspect old-container-id container-id" ]]; then
   echo '[{"Config":{"Env":["OPENAI_API_KEY=test","AI_MODEL=test","AI_REASONING_EFFORT=test","CLICKHOUSE_SETTINGS={}"]}}]'
   exit 0
 fi
