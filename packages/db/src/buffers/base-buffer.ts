@@ -63,6 +63,7 @@ export class BaseBuffer {
   onFlush: () => Promise<void> | void;
   enableParallelProcessing: boolean;
   private activeFlushLock: { lockId: string; lost: boolean } | null = null;
+  private activeSerialFlush: Promise<void> | null = null;
 
   /**
    * Subclass-reported counts/timings for the in-flight flush. Populated by
@@ -488,6 +489,28 @@ export class BaseBuffer {
   }
 
   async tryFlush(options: { trigger?: FlushTrigger } = {}) {
+    if (!this.enableParallelProcessing) {
+      if (this.activeSerialFlush) {
+        await this.activeSerialFlush;
+        return;
+      }
+
+      const serialFlush = this.runFlush(options);
+      this.activeSerialFlush = serialFlush;
+      try {
+        await serialFlush;
+      } finally {
+        if (this.activeSerialFlush === serialFlush) {
+          this.activeSerialFlush = null;
+        }
+      }
+      return;
+    }
+
+    await this.runFlush(options);
+  }
+
+  private async runFlush(options: { trigger?: FlushTrigger } = {}) {
     const trigger: FlushTrigger = options.trigger ?? 'cron';
     const startedAt = performance.now();
     this.inflightStats = {};
