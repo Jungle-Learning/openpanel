@@ -5,7 +5,7 @@ import { createLogger, type ILogger } from '@openpanel/logger';
 import { cronQueue } from '@openpanel/queue';
 import { getRedisCache } from '@openpanel/redis';
 
-export type FlushPhaseTimings = {
+export interface FlushPhaseTimings {
   lrangeMs?: number;
   /** Time spent in CH SELECT(s) during flush (e.g. profile-buffer's
    *  fetch-existing-profile-for-merge step). Only buffers that read CH
@@ -15,11 +15,11 @@ export type FlushPhaseTimings = {
   trimMs?: number;
   /** Total time spent inside onFlush (subclass-specific processing) */
   onFlushMs?: number;
-};
+}
 
 export type FlushTrigger = 'add' | 'cron';
 
-export type FlushObservation = {
+export interface FlushObservation {
   buffer: string;
   /**
    * - `success`: flush ran and completed without error
@@ -38,11 +38,11 @@ export type FlushObservation = {
   llenAtStart?: number;
   phases?: FlushPhaseTimings;
   err?: unknown;
-};
+}
 
 export type FlushObserver = (obs: FlushObservation) => void;
 
-export type AddObservation = {
+export interface AddObservation {
   buffer: string;
   durationMs: number;
   /** True if the add was a no-op (e.g. cached-and-skipped). When set,
@@ -51,7 +51,7 @@ export type AddObservation = {
   skipped?: boolean;
   /** Free-form reason label for skipped adds (e.g. 'cached'). */
   skipReason?: string;
-};
+}
 
 export type AddObserver = (obs: AddObservation) => void;
 
@@ -62,6 +62,7 @@ export class BaseBuffer {
   lockTimeout = 60;
   onFlush: () => Promise<void> | void;
   enableParallelProcessing: boolean;
+  private activeFlushLock: { lockId: string; lost: boolean } | null = null;
 
   /**
    * Subclass-reported counts/timings for the in-flight flush. Populated by
@@ -153,7 +154,7 @@ export class BaseBuffer {
    */
   protected getYieldInterval(
     batchSize: number,
-    opts: { min?: number; max?: number; targetYieldsPerFlush?: number } = {},
+    opts: { min?: number; max?: number; targetYieldsPerFlush?: number } = {}
   ): number {
     const target = opts.targetYieldsPerFlush ?? 20;
     const min = opts.min ?? 100;
@@ -183,12 +184,12 @@ export class BaseBuffer {
         for (const line of lines) {
           yield line;
         }
-      })(),
+      })()
     );
   }
 
-  protected chunks<T>(items: T[], size: number) {
-    const chunks = [];
+  protected chunks<T>(items: T[], size: number): T[][] {
+    const chunks: T[][] = [];
     for (let i = 0; i < items.length; i += size) {
       chunks.push(items.slice(i, i + size));
     }
@@ -316,6 +317,117 @@ export class BaseBuffer {
       end
     `;
     await getRedisCache().eval(script, 1, this.lockKey, lockId);
+  }
+
+  private async renewLock(lockId: string): Promise<boolean> {
+    const script = `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("expire", KEYS[1], ARGV[2])
+      else
+        return 0
+      end
+    `;
+    const renewed = await getRedisCache().eval(
+      script,
+      1,
+      this.lockKey,
+      lockId,
+      this.lockTimeout
+    );
+    return renewed === 1;
+  }
+
+  private startLockRenewal(lock: {
+    lockId: string;
+    lost: boolean;
+  }): ReturnType<typeof setInterval> {
+    const renewalIntervalMs = Math.max(
+      100,
+      Math.floor((this.lockTimeout * 1000) / 3)
+    );
+    let renewalInFlight = false;
+    const timer = setInterval(() => {
+      if (renewalInFlight) {
+        return;
+      }
+      renewalInFlight = true;
+      this.renewLock(lock.lockId)
+        .then((renewed) => {
+          if (!renewed) {
+            lock.lost = true;
+            this.logger.error(
+              { lockKey: this.lockKey },
+              `Lost flush lock for ${this.name}`
+            );
+          }
+        })
+        .catch((error) => {
+          // A renewal error leaves ownership uncertain. Stop destructive
+          // acknowledgements until a later flush can safely retry the rows.
+          lock.lost = true;
+          this.logger.error(
+            { err: error, lockKey: this.lockKey },
+            `Failed to renew flush lock for ${this.name}`
+          );
+        })
+        .finally(() => {
+          renewalInFlight = false;
+        });
+    }, renewalIntervalMs);
+    timer.unref();
+    return timer;
+  }
+
+  /**
+   * Abort work as soon as the current flush knows its Redis lease is gone.
+   * Direct processBuffer() calls used by tests and maintenance do not have a
+   * lease, so they retain their existing behaviour.
+   */
+  protected assertFlushLockOwned(): void {
+    if (this.activeFlushLock?.lost) {
+      throw new Error(`Lost flush lock for ${this.name}`);
+    }
+  }
+
+  /**
+   * Acknowledge a Redis-list prefix only while this flush still owns its
+   * lease. Comparing ownership and trimming in one Lua script prevents a
+   * lease expiry or competing worker from turning a stale trim into data
+   * loss. If ownership is uncertain, leave the rows for a safe retry.
+   */
+  protected async trimRedisListWhileFlushLockOwned(
+    listKey: string,
+    start: number,
+    stop: number
+  ): Promise<void> {
+    const lock = this.activeFlushLock;
+    if (!lock) {
+      await getRedisCache().ltrim(listKey, start, stop);
+      return;
+    }
+    this.assertFlushLockOwned();
+
+    const script = `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        redis.call("ltrim", KEYS[2], ARGV[2], ARGV[3])
+        return 1
+      else
+        return 0
+      end
+    `;
+    const trimmed = await getRedisCache().eval(
+      script,
+      2,
+      this.lockKey,
+      listKey,
+      lock.lockId,
+      start,
+      stop
+    );
+    if (trimmed !== 1) {
+      lock.lost = true;
+      throw new Error(`Lost flush lock for ${this.name}`);
+    }
   }
 
   /**
@@ -453,6 +565,9 @@ export class BaseBuffer {
       return;
     }
 
+    const activeFlushLock = { lockId, lost: false };
+    this.activeFlushLock = activeFlushLock;
+    const lockRenewalTimer = this.startLockRenewal(activeFlushLock);
     const onFlushStarted = performance.now();
     try {
       await this.onFlush();
@@ -483,6 +598,10 @@ export class BaseBuffer {
         err: error,
       });
     } finally {
+      clearInterval(lockRenewalTimer);
+      if (this.activeFlushLock === activeFlushLock) {
+        this.activeFlushLock = null;
+      }
       await this.releaseLock(lockId);
     }
   }

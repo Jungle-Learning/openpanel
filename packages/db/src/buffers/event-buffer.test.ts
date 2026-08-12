@@ -1,13 +1,19 @@
 import type { Readable } from 'node:stream';
-import { getRedisCache } from '@openpanel/redis';
+import { getRedisCache, getRedisPub } from '@openpanel/redis';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as chClient from '../clickhouse/client';
+
 const { ch } = chClient;
 
 // Break circular dep: event-buffer -> event.service -> buffers/index -> EventBuffer
 vi.mock('../services/event.service', () => ({}));
 
-import { EventBuffer, extractProjectId } from './event-buffer';
+import {
+  EventBuffer,
+  extractCreatedAtDate,
+  extractProjectId,
+  getPartitionSafeEventChunks,
+} from './event-buffer';
 
 /** Drain an object-mode Readable into an array of line strings. event-buffer
  *  yields each JSONEachRow row as its own string chunk; the @clickhouse/client
@@ -22,16 +28,27 @@ async function streamToLines(stream: Readable): Promise<string[]> {
 }
 
 const redis = getRedisCache();
+const originalMicroBatchSize = process.env.EVENT_BUFFER_MICRO_BATCH_SIZE;
 
 beforeEach(async () => {
+  process.env.EVENT_BUFFER_MICRO_BATCH_SIZE = '1000';
   const keys = await redis.keys('event*');
-  if (keys.length > 0) await redis.del(...keys);
+  if (keys.length > 0) {
+    await redis.del(...keys);
+  }
 });
 
 afterAll(async () => {
+  if (originalMicroBatchSize === undefined) {
+    delete process.env.EVENT_BUFFER_MICRO_BATCH_SIZE;
+  } else {
+    process.env.EVENT_BUFFER_MICRO_BATCH_SIZE = originalMicroBatchSize;
+  }
   try {
     await redis.quit();
-  } catch {}
+  } catch {
+    // Another test may already have closed the shared Redis client.
+  }
 });
 
 describe('EventBuffer', () => {
@@ -227,17 +244,203 @@ describe('EventBuffer', () => {
 
     expect(insertSpy).toHaveBeenCalledTimes(2);
     const call1 = await streamToLines(
-      insertSpy.mock.calls[0]![0].values as Readable,
+      insertSpy.mock.calls[0]![0].values as Readable
     );
     const call2 = await streamToLines(
-      insertSpy.mock.calls[1]![0].values as Readable,
+      insertSpy.mock.calls[1]![0].values as Readable
     );
     expect(call1.length).toBe(2);
     expect(call2.length).toBe(2);
 
-    if (prev === undefined) delete process.env.EVENT_BUFFER_CHUNK_SIZE;
-    else process.env.EVENT_BUFFER_CHUNK_SIZE = prev;
+    if (prev === undefined) {
+      delete process.env.EVENT_BUFFER_CHUNK_SIZE;
+    } else {
+      process.env.EVENT_BUFFER_CHUNK_SIZE = prev;
+    }
 
+    insertSpy.mockRestore();
+  });
+
+  it('keeps every ClickHouse insert below the daily partition limit', async () => {
+    const historicalEvents = Array.from({ length: 101 }, (_, dayIndex) => ({
+      id: `historical-${dayIndex}`,
+      project_id: 'historical-project',
+      name: 'historical-event',
+      created_at: new Date(Date.UTC(2025, 0, dayIndex + 1)).toISOString(),
+    }));
+
+    // Reverse the dates so this exercises mixed historical input rather than
+    // relying on the caller to have already sorted the queue.
+    for (const event of historicalEvents.reverse()) {
+      eventBuffer.add(event as any);
+    }
+    await eventBuffer.flush();
+
+    const insertSpy = vi
+      .spyOn(ch, 'insert')
+      .mockResolvedValue(undefined as any);
+
+    await eventBuffer.processBuffer();
+
+    expect(insertSpy).toHaveBeenCalledTimes(2);
+    const insertedChunks = await Promise.all(
+      insertSpy.mock.calls.map((call) =>
+        streamToLines(call[0].values as Readable)
+      )
+    );
+    const insertedLines = insertedChunks.flat();
+    expect(insertedLines).toHaveLength(101);
+    expect(new Set(insertedLines.map((line) => JSON.parse(line).id)).size).toBe(
+      101
+    );
+
+    for (const lines of insertedChunks) {
+      const dates = new Set(
+        lines.map((line) => JSON.parse(line).created_at.slice(0, 10))
+      );
+      expect(dates.size).toBeLessThanOrEqual(90);
+    }
+    expect(await eventBuffer.getBufferSize()).toBe(0);
+
+    insertSpy.mockRestore();
+  });
+
+  it('retries only the uncommitted suffix when a later safe insert fails', async () => {
+    const historicalEvents = Array.from({ length: 101 }, (_, dayIndex) => ({
+      id: `retry-${dayIndex}`,
+      project_id: 'historical-project',
+      name: 'historical-event',
+      created_at: new Date(Date.UTC(2025, 0, dayIndex + 1)).toISOString(),
+    }));
+    for (const event of historicalEvents) {
+      eventBuffer.add(event as any);
+    }
+    await eventBuffer.flush();
+
+    const insertSpy = vi
+      .spyOn(ch, 'insert')
+      .mockResolvedValueOnce(undefined as any)
+      .mockRejectedValueOnce(new Error('ClickHouse materialized view failed'));
+
+    await expect(eventBuffer.processBuffer()).rejects.toThrow(
+      'ClickHouse materialized view failed'
+    );
+    expect(await eventBuffer.getBufferSize()).toBe(11);
+
+    insertSpy.mockReset().mockResolvedValue(undefined as any);
+    await eventBuffer.processBuffer();
+
+    expect(insertSpy).toHaveBeenCalledTimes(1);
+    const retriedLines = await streamToLines(
+      insertSpy.mock.calls[0]![0].values as Readable
+    );
+    expect(retriedLines).toHaveLength(11);
+    expect(await eventBuffer.getBufferSize()).toBe(0);
+
+    insertSpy.mockRestore();
+  });
+
+  it('renews the flush lock while sequential safe chunks are still running', async () => {
+    eventBuffer.lockTimeout = 1;
+    for (let dayIndex = 0; dayIndex < 101; dayIndex++) {
+      eventBuffer.add({
+        id: `slow-${dayIndex}`,
+        project_id: 'historical-project',
+        name: 'historical-event',
+        created_at: new Date(Date.UTC(2025, 0, dayIndex + 1)).toISOString(),
+      } as any);
+    }
+    await eventBuffer.flush();
+
+    const insertSpy = vi.spyOn(ch, 'insert').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve(undefined as any), 700);
+        })
+    );
+
+    const firstFlush = eventBuffer.tryFlush();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1100);
+    });
+    const overlappingFlush = eventBuffer.tryFlush();
+    await Promise.all([firstFlush, overlappingFlush]);
+
+    expect(insertSpy).toHaveBeenCalledTimes(2);
+    expect(await eventBuffer.getBufferSize()).toBe(0);
+
+    insertSpy.mockRestore();
+  });
+
+  it('leaves the queue intact when the flush lock is lost before acknowledgement', async () => {
+    for (let dayIndex = 0; dayIndex < 101; dayIndex++) {
+      eventBuffer.add({
+        id: `lost-lock-${dayIndex}`,
+        project_id: 'historical-project',
+        name: 'historical-event',
+        created_at: new Date(Date.UTC(2025, 0, dayIndex + 1)).toISOString(),
+      } as any);
+    }
+    await eventBuffer.flush();
+
+    const redis = getRedisCache();
+    const errorSpy = vi
+      .spyOn(eventBuffer.logger, 'error')
+      .mockImplementation(() => undefined);
+    const insertSpy = vi
+      .spyOn(ch, 'insert')
+      .mockImplementationOnce(async () => {
+        await redis.del(eventBuffer.lockKey);
+        await redis.set(eventBuffer.lockKey, 'competing-owner', 'EX', 30);
+        await redis.rpush(
+          'event_buffer:queue',
+          JSON.stringify({
+            id: 'arrived-after-lock-loss',
+            project_id: 'live-project',
+            name: 'live-event',
+            created_at: '2026-08-12T00:00:00Z',
+          })
+        );
+        return undefined as any;
+      });
+
+    await eventBuffer.tryFlush();
+
+    expect(insertSpy).toHaveBeenCalledOnce();
+    expect(await eventBuffer.getBufferSize()).toBe(102);
+    expect(await redis.get(eventBuffer.lockKey)).toBe('competing-owner');
+    await redis.del(eventBuffer.lockKey);
+
+    insertSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  it('acknowledges a committed chunk even when pubsub notification fails', async () => {
+    eventBuffer.add({
+      id: 'publish-failure',
+      project_id: 'historical-project',
+      name: 'historical-event',
+      created_at: '2026-08-12T00:00:00Z',
+    } as any);
+    await eventBuffer.flush();
+
+    const insertSpy = vi
+      .spyOn(ch, 'insert')
+      .mockResolvedValue(undefined as any);
+    const publishSpy = vi
+      .spyOn(getRedisPub(), 'publish')
+      .mockRejectedValueOnce(new Error('Redis pubsub unavailable'));
+    const warningSpy = vi
+      .spyOn(eventBuffer.logger, 'warn')
+      .mockImplementation(() => undefined);
+
+    await expect(eventBuffer.processBuffer()).resolves.toBeUndefined();
+    expect(insertSpy).toHaveBeenCalledOnce();
+    expect(warningSpy).toHaveBeenCalledOnce();
+    expect(await eventBuffer.getBufferSize()).toBe(0);
+
+    warningSpy.mockRestore();
+    publishSpy.mockRestore();
     insertSpy.mockRestore();
   });
 
@@ -320,7 +523,7 @@ describe('EventBuffer', () => {
     // Errors propagate to tryFlush (which resyncs the counter). The safety
     // property — queue preserved on CH failure — still holds.
     await expect(eventBuffer.processBuffer()).rejects.toThrow(
-      'ClickHouse unavailable',
+      'ClickHouse unavailable'
     );
     expect(await eventBuffer.getBufferSize()).toBe(1);
 
@@ -399,5 +602,63 @@ describe('extractProjectId', () => {
       properties: { nested: { project_id: 'deep-fake' } },
     });
     expect(extractProjectId(line)).toBe('real-project');
+  });
+});
+
+describe('partition-safe event chunks', () => {
+  it('extracts only the top-level created_at date', () => {
+    const line = JSON.stringify({
+      properties: { created_at: '1999-01-01T00:00:00Z' },
+      created_at: '2026-08-12 12:34:56.789',
+    });
+    expect(extractCreatedAtDate(line)).toBe('2026-08-12');
+  });
+
+  it('returns null when created_at is absent or malformed', () => {
+    expect(extractCreatedAtDate(JSON.stringify({ id: 'no-date' }))).toBeNull();
+    expect(extractCreatedAtDate('not-json')).toBeNull();
+    expect(
+      extractCreatedAtDate(JSON.stringify({ created_at: 'not-a-date' }))
+    ).toBeNull();
+  });
+
+  it('honors both the row and distinct-date limits for interleaved input', () => {
+    const lines = Array.from({ length: 202 }, (_, index) =>
+      JSON.stringify({
+        id: `event-${index}`,
+        created_at: new Date(
+          Date.UTC(2025, 0, (index % 101) + 1)
+        ).toISOString(),
+      })
+    ).reverse();
+
+    const chunks = getPartitionSafeEventChunks(lines, 100, 90);
+
+    expect(chunks.flat()).toHaveLength(lines.length);
+    expect(new Set(chunks.flat())).toEqual(new Set(lines));
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(100);
+      expect(
+        new Set(chunk.map((line) => extractCreatedAtDate(line))).size
+      ).toBeLessThanOrEqual(90);
+    }
+  });
+
+  it('keeps missing dates in the insert so ClickHouse can validate them', () => {
+    const validLine = JSON.stringify({
+      id: 'valid',
+      created_at: '2026-08-12T00:00:00Z',
+    });
+    const missingDateLine = JSON.stringify({ id: 'missing-date' });
+
+    const chunks = getPartitionSafeEventChunks(
+      [validLine, missingDateLine],
+      100,
+      90
+    );
+
+    expect(chunks.flat()).toEqual(
+      expect.arrayContaining([validLine, missingDateLine])
+    );
   });
 });
