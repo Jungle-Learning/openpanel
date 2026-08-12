@@ -4,6 +4,9 @@ import type { IClickhouseEvent } from '../services/event.service';
 import { BaseBuffer } from './base-buffer';
 
 const PROJECT_ID_NEEDLE = '"project_id":"';
+const CREATED_AT_NEEDLE = '"created_at":"';
+const UNKNOWN_CREATED_AT_DATE = '\uffff';
+const MAX_DAILY_PARTITIONS_PER_INSERT = 90;
 
 /**
  * Extract the top-level `project_id` from a single JSONEachRow event
@@ -26,9 +29,14 @@ const PROJECT_ID_NEEDLE = '"project_id":"';
  */
 export function extractProjectId(line: string): string | null {
   const first = line.indexOf(PROJECT_ID_NEEDLE);
-  if (first < 0) return null;
+  if (first < 0) {
+    return null;
+  }
 
-  const second = line.indexOf(PROJECT_ID_NEEDLE, first + PROJECT_ID_NEEDLE.length);
+  const second = line.indexOf(
+    PROJECT_ID_NEEDLE,
+    first + PROJECT_ID_NEEDLE.length
+  );
   if (second >= 0) {
     try {
       const obj = JSON.parse(line) as { project_id?: unknown };
@@ -43,22 +51,98 @@ export function extractProjectId(line: string): string | null {
   // valueEnd === valueStart means the value is empty (`"project_id":""`)
   // — treat as missing so we don't pollute pub/sub counts with an empty
   // key. Matches the old regex's `[^"]+` (one-or-more) behavior.
-  if (valueEnd <= valueStart) return null;
+  if (valueEnd <= valueStart) {
+    return null;
+  }
   return line.slice(valueStart, valueEnd);
 }
 
+/**
+ * Extract the top-level event date used by the daily-partitioned materialized
+ * views. The common path avoids parsing the full event; duplicate field names
+ * fall back to JSON.parse so a user property cannot override the event date.
+ */
+export function extractCreatedAtDate(line: string): string | null {
+  const first = line.indexOf(CREATED_AT_NEEDLE);
+  if (first < 0) {
+    return null;
+  }
+
+  const second = line.indexOf(
+    CREATED_AT_NEEDLE,
+    first + CREATED_AT_NEEDLE.length
+  );
+  if (second >= 0) {
+    try {
+      const obj = JSON.parse(line) as { created_at?: unknown };
+      if (typeof obj.created_at !== 'string') {
+        return null;
+      }
+      const date = obj.created_at.slice(0, 10);
+      return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const valueStart = first + CREATED_AT_NEEDLE.length;
+  const date = line.slice(valueStart, valueStart + 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+}
+
+/**
+ * ClickHouse's `dau_mv` is partitioned by day and rejects a single insert
+ * block spanning more than 100 partitions. Historical events can arrive in
+ * user order rather than timestamp order, so normal row-count chunking is not
+ * sufficient. Contiguous chunks preserve Redis order so each successful
+ * insert can be acknowledged immediately without replaying earlier chunks.
+ */
+export function getPartitionSafeEventChunks(
+  lines: string[],
+  maxRowsPerChunk: number,
+  maxDatesPerChunk = MAX_DAILY_PARTITIONS_PER_INSERT
+): string[][] {
+  const chunks: string[][] = [];
+  let currentChunk: string[] = [];
+  let currentDates = new Set<string>();
+  const flushCurrentChunk = () => {
+    if (currentChunk.length === 0) {
+      return;
+    }
+    chunks.push(currentChunk);
+    currentChunk = [];
+    currentDates = new Set<string>();
+  };
+
+  for (const line of lines) {
+    const date = extractCreatedAtDate(line) ?? UNKNOWN_CREATED_AT_DATE;
+    const wouldExceedDateLimit =
+      !currentDates.has(date) && currentDates.size >= maxDatesPerChunk;
+    if (currentChunk.length >= maxRowsPerChunk || wouldExceedDateLimit) {
+      flushCurrentChunk();
+    }
+
+    currentChunk.push(line);
+    currentDates.add(date);
+  }
+  flushCurrentChunk();
+
+  return chunks;
+}
+
 export class EventBuffer extends BaseBuffer {
-  private batchSize = process.env.EVENT_BUFFER_BATCH_SIZE
+  private readonly batchSize = process.env.EVENT_BUFFER_BATCH_SIZE
     ? Number.parseInt(process.env.EVENT_BUFFER_BATCH_SIZE, 10)
     : 4000;
-  private chunkSize = process.env.EVENT_BUFFER_CHUNK_SIZE
+  private readonly chunkSize = process.env.EVENT_BUFFER_CHUNK_SIZE
     ? Number.parseInt(process.env.EVENT_BUFFER_CHUNK_SIZE, 10)
     : 1000;
 
-  private microBatchIntervalMs = process.env.EVENT_BUFFER_MICRO_BATCH_MS
+  private readonly microBatchIntervalMs = process.env
+    .EVENT_BUFFER_MICRO_BATCH_MS
     ? Number.parseInt(process.env.EVENT_BUFFER_MICRO_BATCH_MS, 10)
     : 10;
-  private microBatchMaxSize = process.env.EVENT_BUFFER_MICRO_BATCH_SIZE
+  private readonly microBatchMaxSize = process.env.EVENT_BUFFER_MICRO_BATCH_SIZE
     ? Number.parseInt(process.env.EVENT_BUFFER_MICRO_BATCH_SIZE, 10)
     : 100;
 
@@ -68,7 +152,7 @@ export class EventBuffer extends BaseBuffer {
   /** Tracks consecutive flush failures for observability; reset on success. */
   private flushRetryCount = 0;
 
-  private queueKey = 'event_buffer:queue';
+  private readonly queueKey = 'event_buffer:queue';
 
   constructor() {
     super({
@@ -198,57 +282,66 @@ export class EventBuffer extends BaseBuffer {
     //   - The @clickhouse/client's internal JSON.stringify × N (same)
     //   - All the intermediate object allocations (saves ~200MB heap)
     //
-    // We still need `project_id` per row for the per-project pub/sub.
-    // extractProjectId() does an indexOf-based fast path that's ~50×
-    // faster than JSON.parse, and falls back to a real parse on the
-    // rare line where `project_id` appears more than once (e.g. a
-    // user-supplied `properties.project_id`) — so the count is always
-    // attributed to the top-level field, never a nested one.
-    const countByProject = new Map<string, number>();
-    const yieldEvery = this.getYieldInterval(queueEvents.length, {
-      min: 1000,
-      max: 5000,
-    });
-    for (let i = 0; i < queueEvents.length; i++) {
-      const projectId = extractProjectId(queueEvents[i]!);
-      if (projectId) {
-        countByProject.set(
-          projectId,
-          (countByProject.get(projectId) ?? 0) + 1,
-        );
-      }
-      if ((i + 1) % yieldEvery === 0) {
-        await this.yieldToEventLoop();
-      }
-    }
+    const partitionSafeChunks = getPartitionSafeEventChunks(
+      queueEvents,
+      this.chunkSize
+    );
+    let chInsertMs = 0;
+    let trimMs = 0;
+    let rowsProcessed = 0;
+    try {
+      for (const chunk of partitionSafeChunks) {
+        this.assertFlushLockOwned();
+        const countByProject = new Map<string, number>();
+        for (const line of chunk) {
+          const projectId = extractProjectId(line);
+          if (projectId) {
+            countByProject.set(
+              projectId,
+              (countByProject.get(projectId) ?? 0) + 1
+            );
+          }
+        }
 
-    const chStart = performance.now();
-    await this.parallelLimit(
-      this.chunks(queueEvents, this.chunkSize),
-      (chunk) =>
-        ch.insert({
+        const chStart = performance.now();
+        await ch.insert({
           table: 'events',
           // Stream the raw JSONEachRow lines straight through — already
           // serialized in Redis, no client-side parse/stringify needed.
           values: this.jsonEachRowStream(chunk),
           format: 'JSONEachRow',
           clickhouse_settings: this.getClickhouseSettings(),
-        }),
-    );
-    const chInsertMs = performance.now() - chStart;
+        });
+        chInsertMs += performance.now() - chStart;
 
-    for (const [projectId, count] of countByProject) {
-      publishEvent('events', 'batch', { projectId, count });
+        const trimStart = performance.now();
+        await this.trimRedisListWhileFlushLockOwned(
+          this.queueKey,
+          chunk.length,
+          -1
+        );
+        trimMs += performance.now() - trimStart;
+        rowsProcessed += chunk.length;
+
+        for (const [projectId, count] of countByProject) {
+          try {
+            await publishEvent('events', 'batch', { projectId, count });
+          } catch (error) {
+            this.logger.warn(
+              { err: error, projectId, count },
+              'Failed to publish committed event batch'
+            );
+          }
+        }
+      }
+    } finally {
+      this.reportFlushStats({
+        rowsProcessed,
+        phases: { lrangeMs, chInsertMs, trimMs },
+      });
     }
 
-    const trimStart = performance.now();
-    await redis.ltrim(this.queueKey, queueEvents.length, -1);
-    const trimMs = performance.now() - trimStart;
-
-    this.reportFlushStats({
-      rowsProcessed: queueEvents.length,
-      phases: { lrangeMs, chInsertMs, trimMs },
-    });
+    await this.yieldToEventLoop();
   }
 
   public async getActiveVisitorCount(projectId: string): Promise<number> {
