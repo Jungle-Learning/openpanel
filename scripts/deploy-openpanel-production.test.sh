@@ -93,6 +93,20 @@ cat > "${stub_directory}/ssh" <<'STUB'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+remote_command="${!#}"
+if [[ "$remote_command" == umask\ 077* ]]; then
+  tee "$TEST_UPLOADED_HELPER" > /dev/null
+  if [[ "$TEST_SCENARIO" == upload-mismatch ]]; then
+    printf '%064d  %s\n' 0 "$TEST_UPLOADED_HELPER"
+    exit 0
+  fi
+  sha256sum "$TEST_UPLOADED_HELPER"
+  exit 0
+fi
+
+grep -q 'docker ps --all --quiet' "$TEST_UPLOADED_HELPER"
+grep -q 'candidate_created_at' "$TEST_UPLOADED_HELPER"
+
 IFS= read -r operation
 if [[ "$operation" == "prefetch" || "$operation" == "publish-local" ]]; then
   IFS= read -r token
@@ -126,8 +140,26 @@ export OPENPANEL_PREFETCH_USER="openpanel-deploy"
 export TEST_DOCKER_CALLS="${test_directory}/docker-calls"
 export TEST_CURL_CALLS="${test_directory}/curl-calls"
 export TEST_SSH_CALLS="${test_directory}/ssh-calls"
+export TEST_UPLOADED_HELPER="${test_directory}/uploaded-helper"
 
 touch "$OPENPANEL_KNOWN_HOSTS_PATH" "$OPENPANEL_PREFETCH_SSH_KEY_PATH"
+: > "$TEST_DOCKER_CALLS"
+: > "$TEST_CURL_CALLS"
+: > "$TEST_SSH_CALLS"
+
+set +e
+TEST_SCENARIO=upload-mismatch bash "${repository_root}/scripts/deploy-openpanel-production.sh" \
+  > "${test_directory}/upload-mismatch-output" 2>&1
+upload_mismatch_exit_code=$?
+set -e
+
+[[ "$upload_mismatch_exit_code" -ne 0 ]]
+grep -q "checksum did not match" "${test_directory}/upload-mismatch-output"
+if grep -q -- '--tag .*:production' "$TEST_DOCKER_CALLS"; then
+  echo "Images were promoted before the remote helper checksum was verified" >&2
+  exit 1
+fi
+: > "$TEST_DOCKER_CALLS"
 
 printf 'prefetch\n%s\n%s\n' "$GHCR_PULL_TOKEN" "$GHCR_PULL_USERNAME" \
   | bash "${repository_root}/scripts/prefetch-openpanel-production-images.sh" \

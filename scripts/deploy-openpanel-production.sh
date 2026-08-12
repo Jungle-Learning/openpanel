@@ -28,6 +28,7 @@ fi
 
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-300}"
 REGISTRY_OWNER="${REGISTRY_OWNER:-jungle-learning}"
+REMOTE_HELPER_PATH="/tmp/openpanel-production-helper-${GITHUB_SHA}.sh"
 
 services=(api worker dashboard)
 rollback_directory="$(mktemp -d)"
@@ -72,6 +73,8 @@ promote_images() {
 }
 
 run_remote_operation() {
+  local remote_command="${1:-bash ${REMOTE_HELPER_PATH}}"
+
   ssh \
     -F /dev/null \
     -T \
@@ -83,7 +86,26 @@ run_remote_operation() {
     -o IdentitiesOnly=yes \
     -o StrictHostKeyChecking=yes \
     -o "UserKnownHostsFile=${OPENPANEL_KNOWN_HOSTS_PATH}" \
-    "${OPENPANEL_PREFETCH_USER}@${OPENPANEL_PREFETCH_HOST}"
+    "${OPENPANEL_PREFETCH_USER}@${OPENPANEL_PREFETCH_HOST}" \
+    "$remote_command"
+}
+
+upload_remote_helper() {
+  local local_digest remote_digest
+
+  local_digest="$(shasum -a 256 scripts/prefetch-openpanel-production-images.sh | awk '{ print $1 }')"
+  remote_digest="$(
+    run_remote_operation \
+      "umask 077; cat > '${REMOTE_HELPER_PATH}'; chmod 700 '${REMOTE_HELPER_PATH}'; sha256sum '${REMOTE_HELPER_PATH}'" \
+      < scripts/prefetch-openpanel-production-images.sh \
+      | awk '{ print $1 }'
+  )"
+  if [[ "$remote_digest" != "$local_digest" ]]; then
+    echo "Uploaded production helper checksum did not match the checked-out release" >&2
+    return 1
+  fi
+
+  echo "Uploaded verified production helper for ${GITHUB_SHA}"
 }
 
 prefetch_images() {
@@ -223,6 +245,7 @@ on_exit() {
 
 trap on_exit EXIT
 
+upload_remote_helper
 promote_images
 prefetch_images
 deploy_stack
