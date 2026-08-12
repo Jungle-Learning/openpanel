@@ -387,6 +387,14 @@ describe('EventBuffer', () => {
     const errorSpy = vi
       .spyOn(eventBuffer.logger, 'error')
       .mockImplementation(() => undefined);
+    let signalLockReplaced: (() => void) | undefined;
+    const lockReplaced = new Promise<void>((resolve) => {
+      signalLockReplaced = resolve;
+    });
+    let releaseInsert: (() => void) | undefined;
+    const insertCanFinish = new Promise<void>((resolve) => {
+      releaseInsert = resolve;
+    });
     const insertSpy = vi
       .spyOn(ch, 'insert')
       .mockImplementationOnce(async () => {
@@ -401,10 +409,16 @@ describe('EventBuffer', () => {
             created_at: '2026-08-12T00:00:00Z',
           })
         );
+        signalLockReplaced?.();
+        await insertCanFinish;
         return undefined as any;
       });
 
-    await eventBuffer.tryFlush();
+    const firstFlush = eventBuffer.tryFlush();
+    await lockReplaced;
+    const overlappingFlush = eventBuffer.tryFlush();
+    releaseInsert?.();
+    await Promise.all([firstFlush, overlappingFlush]);
 
     expect(insertSpy).toHaveBeenCalledOnce();
     expect(await eventBuffer.getBufferSize()).toBe(102);
