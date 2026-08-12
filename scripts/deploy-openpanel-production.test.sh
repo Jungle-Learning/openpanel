@@ -22,9 +22,14 @@ if [[ "$*" == buildx\ imagetools\ inspect* ]]; then
   exit 0
 fi
 
-if [[ "$*" == ps\ --quiet* || "$*" == ps\ --all\ --quiet* ]]; then
+if [[ "$*" == ps\ --all\ --quiet* ]]; then
   echo "container-id"
   exit 0
+fi
+
+if [[ "$*" == ps\ --quiet* ]]; then
+  echo "Rollback snapshots must include stopped containers" >&2
+  exit 1
 fi
 
 if [[ "$*" == inspect\ --format* ]]; then

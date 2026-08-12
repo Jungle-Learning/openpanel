@@ -58,12 +58,12 @@ save_local_rollback_images() {
 
   for service_name in api worker dashboard; do
     container_id="$(
-      docker ps --quiet \
+      docker ps --all --quiet \
         --filter "label=com.docker.compose.project=${compose_project}" \
         --filter "label=com.docker.compose.service=openpanel-${service_name}"
     )"
     if [[ -z "$container_id" ]]; then
-      echo "Running openpanel-${service_name} container was not found" >&2
+      echo "OpenPanel ${service_name} container was not found" >&2
       exit 1
     fi
 
