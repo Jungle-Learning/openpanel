@@ -54,18 +54,33 @@ prepare_compose_environment() {
 }
 
 save_local_rollback_images() {
-  local service_name container_id image_id
+  local service_name container_id image_id candidate_id candidate_created_at
+  local newest_created_at
+  local -a container_ids
 
   for service_name in api worker dashboard; do
-    container_id="$(
-      docker ps --quiet \
+    container_ids=()
+    while IFS= read -r candidate_id; do
+      container_ids+=("$candidate_id")
+    done < <(
+      docker ps --all --quiet \
         --filter "label=com.docker.compose.project=${compose_project}" \
         --filter "label=com.docker.compose.service=openpanel-${service_name}"
-    )"
-    if [[ -z "$container_id" ]]; then
-      echo "Running openpanel-${service_name} container was not found" >&2
+    )
+    if (( ${#container_ids[@]} == 0 )); then
+      echo "OpenPanel ${service_name} container was not found" >&2
       exit 1
     fi
+
+    container_id=""
+    newest_created_at=""
+    for candidate_id in "${container_ids[@]}"; do
+      candidate_created_at="$(docker inspect --format '{{.Created}}' "$candidate_id")"
+      if [[ -z "$container_id" || "$candidate_created_at" > "$newest_created_at" ]]; then
+        container_id="$candidate_id"
+        newest_created_at="$candidate_created_at"
+      fi
+    done
 
     image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
     docker tag "$image_id" "ghcr.io/jungle-learning/${service_name}:rollback"
