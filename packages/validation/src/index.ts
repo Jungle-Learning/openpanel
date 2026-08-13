@@ -10,6 +10,8 @@ import {
   timeWindows,
 } from '@openpanel/constants';
 
+export { getConcreteReportEventNames } from './report-events';
+
 export function objectToZodEnums<K extends string>(
   obj: Record<K, any>,
 ): [K, ...K[]] {
