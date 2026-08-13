@@ -42,6 +42,7 @@ type State = 'index' | Exclude<PropertiesComboboxCategory, 'cohort'>;
 
 interface PropertiesComboboxProps {
   event?: IChartEvent;
+  eventNames?: string[];
   children: (setOpen: Dispatch<SetStateAction<boolean>>) => React.ReactNode;
   onSelect: (action: PropertiesComboboxAction) => void;
   exclude?: string[];
@@ -126,6 +127,7 @@ function SearchHeader({
 
 export function PropertiesCombobox({
   event,
+  eventNames,
   children,
   onSelect,
   categories = DEFAULT_CATEGORIES,
@@ -137,6 +139,7 @@ export function PropertiesCombobox({
   const [open, setOpen] = useState(false);
   const properties = useEventProperties({
     event: event?.name,
+    eventNames: eventNames ?? (event?.name === '*' ? [] : undefined),
     projectId,
   });
   const groupPropertiesQuery = useQuery(

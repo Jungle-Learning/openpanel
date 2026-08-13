@@ -52,6 +52,7 @@ import {
   protectedProcedure,
   publicProcedure,
 } from '../trpc';
+import { getPropertyEventNames } from './chart-property-events';
 
 function utc(date: string | Date) {
   if (typeof date === 'string') {
@@ -239,10 +240,11 @@ export const chartRouter = createTRPCRouter({
     .input(
       z.object({
         event: z.string().optional(),
+        eventNames: z.array(z.string()).max(100).optional(),
         projectId: z.string(),
       })
     )
-    .query(async ({ input: { projectId, event } }) => {
+    .query(async ({ input: { projectId, event, eventNames } }) => {
       const profiles = await clix(ch, 'UTC')
         .select<Pick<IServiceProfile, 'properties'>>(['properties'])
         .from(TABLE_NAMES.profiles)
@@ -259,23 +261,30 @@ export const chartRouter = createTRPCRouter({
         ),
       ];
 
-      const query = clix(ch)
-        .select<{ property_key: string; created_at: string }>([
-          'distinct property_key',
-          'max(created_at) as created_at',
-        ])
-        .from(TABLE_NAMES.event_property_values_mv)
-        .where('project_id', '=', projectId)
-        .groupBy(['property_key'])
-        .orderBy('length(property_key)', 'ASC')
-        .orderBy('created_at', 'DESC')
-        .limit(10_000);
+      const propertyEventNames = getPropertyEventNames({ event, eventNames });
+      let res: Array<{ property_key: string; created_at: string }> = [];
 
-      if (event && event !== '*') {
-        query.where('name', '=', event);
+      // An explicit empty scope means that the report has no concrete event
+      // yet. Avoid scanning the entire property-value index in that state.
+      if (propertyEventNames === undefined || propertyEventNames.length > 0) {
+        const query = clix(ch)
+          .select<{ property_key: string; created_at: string }>([
+            'distinct property_key',
+            'max(created_at) as created_at',
+          ])
+          .from(TABLE_NAMES.event_property_values_mv)
+          .where('project_id', '=', projectId)
+          .groupBy(['property_key'])
+          .orderBy('length(property_key)', 'ASC')
+          .orderBy('created_at', 'DESC')
+          .limit(10_000);
+
+        if (propertyEventNames?.length) {
+          query.where('name', 'IN', propertyEventNames);
+        }
+
+        res = await query.execute();
       }
-
-      const res = await query.execute();
 
       const eventProperties = res.map((item) => {
         const key = item.property_key

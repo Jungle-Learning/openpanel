@@ -1,11 +1,11 @@
 import { ColorSquare } from '@/components/color-square';
-import { Combobox } from '@/components/ui/combobox';
-import { useAppParams } from '@/hooks/use-app-params';
-import { useEventProperties } from '@/hooks/use-event-properties';
 import { useDispatch, useSelector } from '@/redux';
 import { ChevronsUpDownIcon, SplitIcon } from 'lucide-react';
 
-import type { IChartBreakdown } from '@openpanel/validation';
+import {
+  getConcreteReportEventNames,
+  type IChartBreakdown,
+} from '@openpanel/validation';
 
 import { Button } from '@/components/ui/button';
 import { addBreakdown, changeBreakdown, removeBreakdown } from '../reportSlice';
@@ -15,7 +15,9 @@ import type { ReportEventMoreProps } from './ReportEventMore';
 
 export function ReportBreakdowns() {
   const selectedBreakdowns = useSelector((state) => state.report.breakdowns);
+  const series = useSelector((state) => state.report.series);
   const dispatch = useDispatch();
+  const breakdownEventNames = getConcreteReportEventNames(series);
 
   const handleMore = (breakdown: IChartBreakdown) => {
     const callback: ReportEventMoreProps['onClick'] = (action) => {
@@ -40,6 +42,7 @@ export function ReportBreakdowns() {
                 <ColorSquare>{index}</ColorSquare>
                 <PropertiesCombobox
                   categories={['event', 'profile', 'group', 'cohort']}
+                  eventNames={breakdownEventNames}
                   onSelect={(action) => {
                     dispatch(
                       changeBreakdown({
@@ -73,6 +76,7 @@ export function ReportBreakdowns() {
 
         <PropertiesCombobox
           categories={['event', 'profile', 'group', 'cohort']}
+          eventNames={breakdownEventNames}
           onSelect={(action) => {
             dispatch(
               addBreakdown({
