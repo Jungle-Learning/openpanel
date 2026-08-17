@@ -15,6 +15,7 @@ import {
   ChartTooltipItem,
 } from '@/components/charts/chart-tooltip';
 import { useNumber } from '@/hooks/use-numer-formatter';
+import { parseChartDate } from '@/hooks/use-format-date-interval';
 import { formatDate } from '@/utils/date';
 import { AXIS_FONT_PROPS } from '../common/axis';
 import { PreviousDiffIndicator } from '../common/previous-diff-indicator';
@@ -38,7 +39,7 @@ const PieTooltip = (props: { payload?: any[] }) => {
           <Fragment key={item.id}>
             {index === 0 && item.date && (
               <ChartTooltipHeader>
-                <div>{formatDate(new Date(item.date))}</div>
+                <div>{formatDate(parseChartDate(item.date))}</div>
               </ChartTooltipHeader>
             )}
             <ChartTooltipItem color={item.color}>

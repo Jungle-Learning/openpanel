@@ -245,6 +245,7 @@ model Project {
   shareReports      ShareReport[]
   shareWidgets      ShareWidget[]
   meta              EventMeta[]
+  customEvents      CustomEvent[]
   references        Reference[]
   access            ProjectAccess[]
   notificationRules NotificationRule[]
@@ -512,6 +513,27 @@ model EventMeta {
 
   @@unique([name, projectId])
   @@map("event_meta")
+}
+
+enum CustomEventOperation {
+  union
+  intersection
+}
+
+model CustomEvent {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String?
+  operation   CustomEventOperation
+  eventNames  String[]
+  projectId   String
+  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([name, projectId])
+  @@map("custom_events")
 }
 
 model Reference {

@@ -1,8 +1,12 @@
 import { slug } from '@openpanel/common';
 import { alphabetIds } from '@openpanel/constants';
-import type { IChartEventItem } from '@openpanel/validation';
 import { getSettingsForProject } from '../services/organization.service';
 import type { NormalizedInput } from './normalize';
+import {
+  isProfileSetDefinition,
+  isQueryBackedDefinition,
+  toQueryEvent,
+} from './profile-set';
 import type { ConcreteSeries, Plan } from './types';
 
 /**
@@ -16,8 +20,8 @@ export async function plan(normalized: NormalizedInput): Promise<Plan> {
 
   // Create concrete series placeholders for each definition
   normalized.series.forEach((definition, index) => {
-    if (definition.type === 'event') {
-      const event = definition as IChartEventItem & { type: 'event' };
+    if (isQueryBackedDefinition(definition)) {
+      const event = toQueryEvent(definition);
 
       // For events, create a placeholder
       // If breakdowns exist, fetch will return multiple series (one per breakdown value)
@@ -28,7 +32,7 @@ export async function plan(normalized: NormalizedInput): Promise<Plan> {
         definitionIndex: index,
         name: [event.displayName || event.name],
         context: {
-          event: event.name,
+          event: isProfileSetDefinition(definition) ? undefined : event.name,
           filters: [...event.filters],
         },
         data: [], // Will be populated by fetch stage

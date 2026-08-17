@@ -1,13 +1,13 @@
-import { getISOWeek } from 'date-fns';
-
 import type { IInterval } from '@openpanel/validation';
+import { getISOWeek } from 'date-fns';
 
 export function formatDateInterval(options: {
   interval: IInterval;
-  date: Date;
+  date: Date | string;
   short: boolean;
 }): string {
-  const { interval, date, short } = options;
+  const { interval, short } = options;
+  const date = parseChartDate(options.date);
   try {
     if (interval === 'hour' || interval === 'minute') {
       if (short) {
@@ -61,6 +61,23 @@ export function formatDateInterval(options: {
   }
 }
 
+export function parseChartDate(date: Date | string): Date {
+  if (date instanceof Date) {
+    return date;
+  }
+
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch;
+    // ClickHouse date buckets are calendar labels in the project's timezone,
+    // not UTC instants. Parsing YYYY-MM-DD with `new Date(string)` treats it as
+    // UTC and can display the previous month/day in western timezones.
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  return new Date(date);
+}
+
 export function useFormatDateInterval(options: {
   interval: IInterval;
   short: boolean;
@@ -68,6 +85,6 @@ export function useFormatDateInterval(options: {
   return (date: Date | string) =>
     formatDateInterval({
       ...options,
-      date: typeof date === 'string' ? new Date(date) : date,
+      date,
     });
 }

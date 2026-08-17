@@ -1,11 +1,7 @@
 import type { ISerieDataItem } from '@openpanel/common';
 import { groupByLabels } from '@openpanel/common';
 import { alphabetIds } from '@openpanel/constants';
-import type {
-  FinalChart,
-  IChartEventItem,
-  IReportInput,
-} from '@openpanel/validation';
+import type { FinalChart, IReportInput } from '@openpanel/validation';
 import { chQuery } from '../clickhouse/client';
 import { getAggregateChartSql } from '../services/chart.service';
 import { getChartPrevStartEndDate } from '../services/date.service';
@@ -18,6 +14,11 @@ import { fetch } from './fetch';
 import { format } from './format';
 import { normalize } from './normalize';
 import { plan } from './plan';
+import {
+  isProfileSetDefinition,
+  isQueryBackedDefinition,
+  toQueryEvent,
+} from './profile-set';
 import type { ConcreteSeries } from './types';
 
 /**
@@ -31,7 +32,7 @@ export async function executeChart(input: IReportInput): Promise<FinalChart> {
   // Handle subscription end date limit
   const endDate = await getOrganizationSubscriptionChartEndDate(
     input.projectId,
-    normalized.endDate
+    normalized.endDate,
   );
   if (endDate) {
     normalized.endDate = endDate;
@@ -71,7 +72,7 @@ export async function executeChart(input: IReportInput): Promise<FinalChart> {
     executionPlan.definitions,
     includeAlphaIds,
     previousSeries,
-    normalized.limit
+    normalized.limit,
   );
 
   return response;
@@ -82,7 +83,7 @@ export async function executeChart(input: IReportInput): Promise<FinalChart> {
  * Executes a simplified pipeline: normalize -> fetch aggregate -> format
  */
 export async function executeAggregateChart(
-  input: IReportInput
+  input: IReportInput,
 ): Promise<FinalChart> {
   // Stage 1: Normalize input
   const normalized = await normalize(input);
@@ -90,7 +91,7 @@ export async function executeAggregateChart(
   // Handle subscription end date limit
   const endDate = await getOrganizationSubscriptionChartEndDate(
     input.projectId,
-    normalized.endDate
+    normalized.endDate,
   );
   if (endDate) {
     normalized.endDate = endDate;
@@ -104,12 +105,12 @@ export async function executeAggregateChart(
   for (let i = 0; i < normalized.series.length; i++) {
     const definition = normalized.series[i]!;
 
-    if (definition.type !== 'event') {
+    if (!isQueryBackedDefinition(definition)) {
       // Skip formulas - they'll be computed in the next stage
       continue;
     }
 
-    const event = definition as IChartEventItem & { type: 'event' };
+    const event = toQueryEvent(definition);
 
     // Build query input
     const queryInput = {
@@ -120,6 +121,8 @@ export async function executeAggregateChart(
         filters: event.filters,
         displayName: event.displayName,
         property: event.property,
+        eventNames: event.eventNames,
+        setOperation: event.setOperation,
       },
       projectId: normalized.projectId,
       startDate: normalized.startDate,
@@ -136,7 +139,7 @@ export async function executeAggregateChart(
       await getAggregateChartSql(queryInput),
       {
         session_timezone: timezone,
-      }
+      },
     );
 
     // Fallback: if no results with breakdowns, try without breakdowns
@@ -148,7 +151,7 @@ export async function executeAggregateChart(
         }),
         {
           session_timezone: timezone,
-        }
+        },
       );
     }
 
@@ -202,7 +205,7 @@ export async function executeAggregateChart(
         definitionIndex: i,
         name: grouped.name,
         context: {
-          event: event.name,
+          event: isProfileSetDefinition(definition) ? undefined : event.name,
           filters,
           breakdownValue,
           breakdowns,
@@ -232,11 +235,11 @@ export async function executeAggregateChart(
     for (let i = 0; i < normalized.series.length; i++) {
       const definition = normalized.series[i]!;
 
-      if (definition.type !== 'event') {
+      if (!isQueryBackedDefinition(definition)) {
         continue;
       }
 
-      const event = definition as IChartEventItem & { type: 'event' };
+      const event = toQueryEvent(definition);
 
       const queryInput = {
         event: {
@@ -246,6 +249,8 @@ export async function executeAggregateChart(
           filters: event.filters,
           displayName: event.displayName,
           property: event.property,
+          eventNames: event.eventNames,
+          setOperation: event.setOperation,
         },
         projectId: normalized.projectId,
         startDate: previousPeriod.startDate,
@@ -261,7 +266,7 @@ export async function executeAggregateChart(
         await getAggregateChartSql(queryInput),
         {
           session_timezone: timezone,
-        }
+        },
       );
 
       if (queryResult.length === 0 && normalized.breakdowns.length > 0) {
@@ -272,7 +277,7 @@ export async function executeAggregateChart(
           }),
           {
             session_timezone: timezone,
-          }
+          },
         );
       }
 
@@ -319,7 +324,7 @@ export async function executeAggregateChart(
           definitionIndex: i,
           name: grouped.name,
           context: {
-            event: event.name,
+            event: isProfileSetDefinition(definition) ? undefined : event.name,
             filters,
             breakdownValue,
             breakdowns,
@@ -343,7 +348,7 @@ export async function executeAggregateChart(
     normalized.series,
     includeAlphaIds,
     previousSeries,
-    normalized.limit
+    normalized.limit,
   );
 
   return response;
