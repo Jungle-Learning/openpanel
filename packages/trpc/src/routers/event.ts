@@ -1,5 +1,7 @@
 import {
+  ch,
   chQuery,
+  clix,
   convertClickhouseDateToJs,
   db,
   eventService,
@@ -71,9 +73,12 @@ export const eventRouter = createTRPCRouter({
         );
       }
 
-      const sourceEventNames = await chQuery<{ name: string }>(
-        `SELECT DISTINCT name FROM ${TABLE_NAMES.event_names_mv} WHERE project_id = ${sqlstring.escape(input.projectId)} AND name IN (${input.eventNames.map((eventName) => sqlstring.escape(eventName)).join(', ')})`,
-      );
+      const sourceEventNames = await clix(ch)
+        .select<{ name: string }>(['DISTINCT name'])
+        .from(TABLE_NAMES.event_names_mv)
+        .where('project_id', '=', input.projectId)
+        .where('name', 'IN', input.eventNames)
+        .execute();
       const existingSourceNames = new Set(
         sourceEventNames.map((event) => event.name),
       );
@@ -86,9 +91,13 @@ export const eventRouter = createTRPCRouter({
         );
       }
 
-      const trackedEventWithSameName = await chQuery<{ name: string }>(
-        `SELECT name FROM ${TABLE_NAMES.event_names_mv} WHERE project_id = ${sqlstring.escape(input.projectId)} AND name = ${sqlstring.escape(input.name)} LIMIT 1`,
-      );
+      const trackedEventWithSameName = await clix(ch)
+        .select<{ name: string }>(['name'])
+        .from(TABLE_NAMES.event_names_mv)
+        .where('project_id', '=', input.projectId)
+        .where('name', '=', input.name)
+        .limit(1)
+        .execute();
       if (trackedEventWithSameName.length > 0 || input.name === '*') {
         throw TRPCBadRequestError(
           `“${input.name}” is already used by a tracked event`,

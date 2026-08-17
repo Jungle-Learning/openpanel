@@ -7,7 +7,8 @@ import {
   type IGetChartDataInput,
 } from '@openpanel/validation';
 import sqlstring from 'sqlstring';
-import { formatClickhouseDate, TABLE_NAMES } from '../clickhouse/client';
+import { ch, formatClickhouseDate, TABLE_NAMES } from '../clickhouse/client';
+import { clix } from '../clickhouse/query-builder';
 import { db } from '../prisma-client';
 import { createSqlBuilder } from '../sql-builder';
 
@@ -519,12 +520,14 @@ export async function getChartSql({
 
   // Build WHERE clause without the bar filter (for use in subqueries and CTEs)
   // Define this early so we can use it in CTE definitions
-  const getWhereWithoutBar = () => {
+  const getWhereConditionWithoutBar = () => {
     const whereWithoutBar = { ...sb.where };
     delete whereWithoutBar.bar;
-    return Object.keys(whereWithoutBar).length
-      ? `WHERE ${join(whereWithoutBar, ' AND ')}`
-      : '';
+    return join(whereWithoutBar, ' AND ');
+  };
+  const getWhereWithoutBar = () => {
+    const whereCondition = getWhereConditionWithoutBar();
+    return whereCondition ? `WHERE ${whereCondition}` : '';
   };
 
   // Collect all profile fields used in filters and breakdowns
@@ -781,41 +784,49 @@ export async function getChartSql({
 
   if (isProfileSet && event.setOperation === 'intersection') {
     const sourceJoins = `${subqueryGroupJoins}${profilesJoinRef ? `${profilesJoinRef} ` : ''}${inlineCohortJoinsSql ? `${inlineCohortJoinsSql} ` : ''}${inlineAllCohortsJoin}`;
-    const sourceWhere = getWhereWithoutBar();
     const breakdownAliases = breakdowns.map((_, index) => `label_${index + 1}`);
     const breakdownSelectParts = breakdownAliases.map(
       (label) => sb.select[label]!,
     );
     const requiredEventCount = profileSetEventNames.length;
-    const buildMatchingProfilesSql = (includeDateBucket: boolean) => {
+    const buildMatchingProfilesQuery = (includeDateBucket: boolean) => {
       const selectParts = [
-        ...(includeDateBucket ? [`${dateBucketExpression} as date`] : []),
+        ...(includeDateBucket
+          ? [clix.exp(`${dateBucketExpression} as date`)]
+          : []),
         'profile_id',
-        ...breakdownSelectParts,
-        'uniqExact(e.name) as matched_event_count',
+        ...breakdownSelectParts.map((part) => clix.exp(part)),
+        clix.exp('uniqExact(e.name) as matched_event_count'),
       ];
       const groupByParts = [
         ...(includeDateBucket ? ['date'] : []),
         'profile_id',
         ...breakdownAliases,
       ];
-      return `SELECT ${selectParts.join(', ')} FROM ${TABLE_NAMES.events} e ${sourceJoins}${sourceWhere} GROUP BY ${groupByParts.join(', ')} HAVING matched_event_count = ${requiredEventCount}`;
+      const matchingProfilesQuery = clix(ch, timezone)
+        .select(selectParts)
+        .from(`${TABLE_NAMES.events} e`)
+        .rawWhere(getWhereConditionWithoutBar())
+        .groupBy(groupByParts)
+        .having('matched_event_count', '=', requiredEventCount);
+      if (sourceJoins.trim()) {
+        matchingProfilesQuery.rawJoin(sourceJoins.trim());
+      }
+      return matchingProfilesQuery;
     };
 
-    const totalMatchingProfilesSql = buildMatchingProfilesSql(false);
-    if (breakdownAliases.length > 0) {
-      addCte(
-        '_profile_set_total',
-        `SELECT ${breakdownAliases.join(', ')}, count() as total_count FROM (${totalMatchingProfilesSql}) GROUP BY ${breakdownAliases.join(', ')}`,
-      );
-    } else {
-      addCte(
-        '_profile_set_total',
-        `SELECT count() as total_count FROM (${totalMatchingProfilesSql})`,
-      );
-    }
+    // As with ordinary unique-user series, the headline total is evaluated
+    // across the complete selected range. Each plotted point evaluates the
+    // intersection again within its own date bucket.
+    const totalMatchingProfilesQuery = buildMatchingProfilesQuery(false);
+    const totalQuery = clix(ch, timezone)
+      .select([...breakdownAliases, clix.exp('count() as total_count')])
+      .from(clix.exp(totalMatchingProfilesQuery))
+      .groupBy(breakdownAliases)
+      .toSQL();
+    addCte('_profile_set_total', totalQuery);
 
-    sb.from = `(${buildMatchingProfilesSql(true)}) AS _profile_set_members`;
+    sb.from = `(${buildMatchingProfilesQuery(true).toSQL()}) AS _profile_set_members`;
     sb.where = {};
     sb.joins = {};
     sb.select.date = 'date';
@@ -930,6 +941,7 @@ export async function getAggregateChartSql({
   endDate,
   projectId,
   limit,
+  timezone,
 }: Omit<IGetChartDataInput, 'interval' | 'chartType'> & {
   timezone: string;
 }) {
@@ -1166,12 +1178,21 @@ export async function getAggregateChartSql({
     const breakdownSelectParts = breakdownAliases.map(
       (label) => sb.select[label]!,
     );
-    const sourceWhere = Object.keys(sb.where).length
-      ? `WHERE ${join(sb.where, ' AND ')}`
-      : '';
-    const matchingProfilesSql = `SELECT profile_id, ${breakdownSelectParts.length > 0 ? `${breakdownSelectParts.join(', ')}, ` : ''}uniqExact(e.name) as matched_event_count FROM ${TABLE_NAMES.events} e ${sourceJoins}${sourceWhere} GROUP BY profile_id${breakdownAliases.length > 0 ? `, ${breakdownAliases.join(', ')}` : ''} HAVING matched_event_count = ${profileSetEventNames.length}`;
+    const matchingProfilesQuery = clix(ch, timezone)
+      .select([
+        'profile_id',
+        ...breakdownSelectParts.map((part) => clix.exp(part)),
+        clix.exp('uniqExact(e.name) as matched_event_count'),
+      ])
+      .from(`${TABLE_NAMES.events} e`)
+      .rawWhere(join(sb.where, ' AND '))
+      .groupBy(['profile_id', ...breakdownAliases])
+      .having('matched_event_count', '=', profileSetEventNames.length);
+    if (sourceJoins.trim()) {
+      matchingProfilesQuery.rawJoin(sourceJoins.trim());
+    }
 
-    sb.from = `(${matchingProfilesSql}) AS _profile_set_members`;
+    sb.from = `(${matchingProfilesQuery.toSQL()}) AS _profile_set_members`;
     sb.where = {};
     sb.joins = {};
     sb.select.count = 'count() as count';

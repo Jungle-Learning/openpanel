@@ -43,7 +43,7 @@ export const formulaTemplates = [
     label: 'Intersection (unique users)',
     example: 'INTERSECTION(A, B)',
     description:
-      'Counts unique users who did every selected event in the same time bucket.',
+      'Counts users who did every selected event; chart points evaluate each time bucket.',
   },
   {
     id: 'custom',
