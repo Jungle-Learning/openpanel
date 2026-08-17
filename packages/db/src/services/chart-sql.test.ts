@@ -370,6 +370,12 @@ describe('chart.service / getChartSql', () => {
     expect(sql).toContain('HAVING matched_event_count = 2');
     expect(sql).toContain('AS _profile_set_members');
     expect(sql).toMatch(/SELECT .*count\(\) as count, date/);
+    expect(sql).toContain(
+      'SELECT count() as total_count FROM (SELECT profile_id, uniqExact(e.name) as matched_event_count',
+    );
+    expect(sql).toContain(
+      "SELECT toStartOfMonth(created_at, 'UTC') as date, profile_id, uniqExact(e.name) as matched_event_count",
+    );
     if (chReachable) {
       await explain(sql);
     }
