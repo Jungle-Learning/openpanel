@@ -1,12 +1,10 @@
 /** biome-ignore-all lint/style/useDefaultSwitchClause: switch cases are exhaustive by design */
 import { stripLeadingAndTrailingSlashes } from '@openpanel/common';
 import {
-  type CohortDefinition,
   getCohortIds,
   type IChartBreakdown,
   type IChartEventFilter,
   type IGetChartDataInput,
-  type IReportInput,
 } from '@openpanel/validation';
 import sqlstring from 'sqlstring';
 import { formatClickhouseDate, TABLE_NAMES } from '../clickhouse/client';
@@ -110,15 +108,31 @@ export function normalizeEventField(name: string): string {
 // cohort breakdown, or `has_profile`. Used to drop unknown filters/breakdowns
 // instead of emitting invalid `SELECT cohort` / `SELECT temple_name` queries.
 export function isKnownEventField(name: string): boolean {
-  if (name === 'has_profile') return true;
-  if (isAllCohortsBreakdown(name)) return true;
-  if (extractCohortId(name)) return true;
-  if (name.startsWith('properties.')) return true;
-  if (name.startsWith('profile.')) return true;
-  if (name.startsWith('group.')) return true;
+  if (name === 'has_profile') {
+    return true;
+  }
+  if (isAllCohortsBreakdown(name)) {
+    return true;
+  }
+  if (extractCohortId(name)) {
+    return true;
+  }
+  if (name.startsWith('properties.')) {
+    return true;
+  }
+  if (name.startsWith('profile.')) {
+    return true;
+  }
+  if (name.startsWith('group.')) {
+    return true;
+  }
   const normalized = normalizeEventField(name);
-  if (normalized.startsWith('properties.')) return true;
-  if (EVENT_TOP_LEVEL_COLUMNS.has(normalized)) return true;
+  if (normalized.startsWith('properties.')) {
+    return true;
+  }
+  if (EVENT_TOP_LEVEL_COLUMNS.has(normalized)) {
+    return true;
+  }
   return false;
 }
 
@@ -139,9 +153,7 @@ export async function fetchCohortsMetadata(
     select: { id: true, name: true },
   });
 
-  return new Map(
-    cohorts.map((c) => [c.id, { id: c.id, name: c.name }]),
-  );
+  return new Map(cohorts.map((c) => [c.id, { id: c.id, name: c.name }]));
 }
 
 export function getCohortCteName(cohortId: string): string {
@@ -194,9 +206,7 @@ export async function fetchProjectCohorts(
   });
 }
 
-export function buildAllCohortsMembershipQuery(
-  projectId: string,
-): string {
+export function buildAllCohortsMembershipQuery(projectId: string): string {
   return `
     SELECT profile_id, cohort_id
     FROM ${TABLE_NAMES.cohort_members} FINAL
@@ -238,7 +248,7 @@ export function collectBreakdownCohortIds(
 export function transformPropertyKey(property: string) {
   const propertyPatterns = ['properties', 'profile.properties'];
   const match = propertyPatterns.find((pattern) =>
-    property.startsWith(`${pattern}.`)
+    property.startsWith(`${pattern}.`),
   );
 
   if (!match) {
@@ -349,9 +359,7 @@ export function getSelectPropertyKey(
 
   if (extractedCohortId && projectId) {
     const cohortAlias = getCohortAlias(extractedCohortId);
-    const inLabel = cohortName
-      ? sqlstring.escape(cohortName)
-      : "'In Cohort'";
+    const inLabel = cohortName ? sqlstring.escape(cohortName) : "'In Cohort'";
     const notInLabel = cohortName
       ? sqlstring.escape(`Not ${cohortName}`)
       : "'Not In Cohort'";
@@ -370,7 +378,7 @@ export function getSelectPropertyKey(
   const propertyPatterns = ['properties', 'profile.properties'];
 
   const match = propertyPatterns.find((pattern) =>
-    property.startsWith(`${pattern}.`)
+    property.startsWith(`${pattern}.`),
   );
   if (!match) {
     return property;
@@ -378,9 +386,8 @@ export function getSelectPropertyKey(
 
   // Only the events table's bare `properties` map needs aliasing —
   // `profile.properties` already routes through the profile join alias.
-  const aliasPrefix = match === 'properties' && eventsAlias
-    ? `${eventsAlias}.`
-    : '';
+  const aliasPrefix =
+    match === 'properties' && eventsAlias ? `${eventsAlias}.` : '';
 
   const materializedColumn = MATERIALIZED_EVENT_PROPERTY_COLUMNS[property];
   if (match === 'properties' && materializedColumn) {
@@ -389,7 +396,7 @@ export function getSelectPropertyKey(
 
   if (property.includes('*')) {
     return `arrayMap(x -> trim(x), mapValues(mapExtractKeyLike(${aliasPrefix}${match}, ${sqlstring.escape(
-      transformPropertyKey(property)
+      transformPropertyKey(property),
     )})))`;
   }
 
@@ -444,6 +451,11 @@ export async function getChartSql({
 
   const cohortIds = collectBreakdownCohortIds(breakdowns);
   const cohortMetadata = await fetchCohortsMetadata(cohortIds);
+  const profileSetEventNames = event.eventNames
+    ? [...new Set(event.eventNames.filter(Boolean))]
+    : [];
+  const isProfileSet =
+    profileSetEventNames.length >= 2 && event.setOperation !== undefined;
 
   // Add CTE + JOIN for "all cohorts" breakdown
   if (hasAllCohortsBreakdown) {
@@ -465,7 +477,12 @@ export async function getChartSql({
   sb.where = getEventFiltersWhereClause(event.filters, projectId, 'e');
   sb.where.projectId = `project_id = ${sqlstring.escape(projectId)}`;
 
-  if (event.name !== '*') {
+  if (isProfileSet) {
+    sb.select.label_0 = `${sqlstring.escape(event.displayName || event.name)} as label_0`;
+    sb.where.eventName = `e.name IN (${profileSetEventNames
+      .map((eventName) => sqlstring.escape(eventName))
+      .join(', ')})`;
+  } else if (event.name !== '*') {
     sb.select.label_0 = `${sqlstring.escape(event.name)} as label_0`;
     sb.where.eventName = `e.name = ${sqlstring.escape(event.name)}`;
   } else {
@@ -473,16 +490,16 @@ export async function getChartSql({
   }
 
   const anyFilterOnProfile = event.filters.some((filter) =>
-    filter.name.startsWith('profile.')
+    filter.name.startsWith('profile.'),
   );
   const anyBreakdownOnProfile = breakdowns.some((breakdown) =>
-    breakdown.name.startsWith('profile.')
+    breakdown.name.startsWith('profile.'),
   );
   const anyFilterOnGroup = event.filters.some((filter) =>
-    filter.name.startsWith('group.')
+    filter.name.startsWith('group.'),
   );
   const anyBreakdownOnGroup = breakdowns.some((breakdown) =>
-    breakdown.name.startsWith('group.')
+    breakdown.name.startsWith('group.'),
   );
   const anyMetricOnGroup = !!event.property?.startsWith('group.');
   const needsGroupArrayJoin =
@@ -494,7 +511,7 @@ export async function getChartSql({
   if (needsGroupArrayJoin) {
     addCte(
       '_g',
-      `SELECT id, name, type, properties FROM ${TABLE_NAMES.groups} FINAL WHERE project_id = ${sqlstring.escape(projectId)}`
+      `SELECT id, name, type, properties FROM ${TABLE_NAMES.groups} FINAL WHERE project_id = ${sqlstring.escape(projectId)}`,
     );
     sb.joins.groups = 'ARRAY JOIN groups AS _group_id';
     sb.joins.groups_table = 'LEFT ANY JOIN _g ON _g.id = _group_id';
@@ -602,7 +619,7 @@ export async function getChartSql({
       'profile',
       `SELECT ${selectFields.join(', ')}
       FROM ${TABLE_NAMES.profiles} FINAL
-      WHERE project_id = ${sqlstring.escape(projectId)}`
+      WHERE project_id = ${sqlstring.escape(projectId)}`,
     );
 
     // Use the CTE reference in the main query
@@ -614,40 +631,46 @@ export async function getChartSql({
   // for a valid range. The SELECT bucket truncation is always safe.
   const hasValidFillRange =
     !!startDate && !!endDate && new Date(endDate) >= new Date(startDate);
+  let dateBucketExpression = '';
   switch (interval) {
     case 'minute': {
       if (hasValidFillRange) {
         sb.fill = `FROM toStartOfMinute(toDateTime('${startDate}')) TO toStartOfMinute(toDateTime('${endDate}')) STEP toIntervalMinute(1)`;
       }
-      sb.select.date = 'toStartOfMinute(created_at) as date';
+      dateBucketExpression = 'toStartOfMinute(created_at)';
+      sb.select.date = `${dateBucketExpression} as date`;
       break;
     }
     case 'hour': {
       if (hasValidFillRange) {
         sb.fill = `FROM toStartOfHour(toDateTime('${startDate}')) TO toStartOfHour(toDateTime('${endDate}')) STEP toIntervalHour(1)`;
       }
-      sb.select.date = 'toStartOfHour(created_at) as date';
+      dateBucketExpression = 'toStartOfHour(created_at)';
+      sb.select.date = `${dateBucketExpression} as date`;
       break;
     }
     case 'day': {
       if (hasValidFillRange) {
         sb.fill = `FROM toStartOfDay(toDateTime('${startDate}')) TO toStartOfDay(toDateTime('${endDate}')) STEP toIntervalDay(1)`;
       }
-      sb.select.date = 'toStartOfDay(created_at) as date';
+      dateBucketExpression = 'toStartOfDay(created_at)';
+      sb.select.date = `${dateBucketExpression} as date`;
       break;
     }
     case 'week': {
       if (hasValidFillRange) {
         sb.fill = `FROM toStartOfWeek(toDateTime('${startDate}'), 1, '${timezone}') TO toStartOfWeek(toDateTime('${endDate}'), 1, '${timezone}') STEP toIntervalWeek(1)`;
       }
-      sb.select.date = `toStartOfWeek(created_at, 1, '${timezone}') as date`;
+      dateBucketExpression = `toStartOfWeek(created_at, 1, '${timezone}')`;
+      sb.select.date = `${dateBucketExpression} as date`;
       break;
     }
     case 'month': {
       if (hasValidFillRange) {
         sb.fill = `FROM toStartOfMonth(toDateTime('${startDate}'), '${timezone}') TO toStartOfMonth(toDateTime('${endDate}'), '${timezone}') STEP toIntervalMonth(1)`;
       }
-      sb.select.date = `toStartOfMonth(created_at, '${timezone}') as date`;
+      dateBucketExpression = `toStartOfMonth(created_at, '${timezone}')`;
+      sb.select.date = `${dateBucketExpression} as date`;
       break;
     }
   }
@@ -725,7 +748,7 @@ export async function getChartSql({
     sb.from = `(
       SELECT DISTINCT ON (profile_id) * from ${TABLE_NAMES.events} e ${getJoins()} WHERE ${join(
         sb.where,
-        ' AND '
+        ' AND ',
       )}
         ORDER BY profile_id, created_at DESC
       ) as subQuery`;
@@ -756,6 +779,72 @@ export async function getChartSql({
     ? `INNER JOIN (${buildAllCohortsMembershipQuery(projectId)}) AS _all_cohorts ON _all_cohorts.profile_id = e.profile_id `
     : '';
 
+  if (isProfileSet && event.setOperation === 'intersection') {
+    const sourceJoins = `${subqueryGroupJoins}${profilesJoinRef ? `${profilesJoinRef} ` : ''}${inlineCohortJoinsSql ? `${inlineCohortJoinsSql} ` : ''}${inlineAllCohortsJoin}`;
+    const sourceWhere = getWhereWithoutBar();
+    const breakdownAliases = breakdowns.map((_, index) => `label_${index + 1}`);
+    const breakdownSelectParts = breakdownAliases.map(
+      (label) => sb.select[label]!,
+    );
+    const requiredEventCount = profileSetEventNames.length;
+    const buildMatchingProfilesSql = (includeDateBucket: boolean) => {
+      const selectParts = [
+        ...(includeDateBucket ? [`${dateBucketExpression} as date`] : []),
+        'profile_id',
+        ...breakdownSelectParts,
+        'uniqExact(e.name) as matched_event_count',
+      ];
+      const groupByParts = [
+        ...(includeDateBucket ? ['date'] : []),
+        'profile_id',
+        ...breakdownAliases,
+      ];
+      return `SELECT ${selectParts.join(', ')} FROM ${TABLE_NAMES.events} e ${sourceJoins}${sourceWhere} GROUP BY ${groupByParts.join(', ')} HAVING matched_event_count = ${requiredEventCount}`;
+    };
+
+    const totalMatchingProfilesSql = buildMatchingProfilesSql(false);
+    if (breakdownAliases.length > 0) {
+      addCte(
+        '_profile_set_total',
+        `SELECT ${breakdownAliases.join(', ')}, count() as total_count FROM (${totalMatchingProfilesSql}) GROUP BY ${breakdownAliases.join(', ')}`,
+      );
+    } else {
+      addCte(
+        '_profile_set_total',
+        `SELECT count() as total_count FROM (${totalMatchingProfilesSql})`,
+      );
+    }
+
+    sb.from = `(${buildMatchingProfilesSql(true)}) AS _profile_set_members`;
+    sb.where = {};
+    sb.joins = {};
+    sb.select.date = 'date';
+    sb.select.count = 'count() as count';
+    for (const breakdownAlias of breakdownAliases) {
+      sb.select[breakdownAlias] = breakdownAlias;
+    }
+
+    if (breakdownAliases.length > 0) {
+      sb.joins.profile_set_total = `LEFT ANY JOIN _profile_set_total ON ${breakdownAliases
+        .map(
+          (breakdownAlias) =>
+            `_profile_set_total.${breakdownAlias} = _profile_set_members.${breakdownAlias}`,
+        )
+        .join(' AND ')}`;
+      sb.select.total_unique_count =
+        'any(_profile_set_total.total_count) as total_count';
+    } else {
+      sb.select.total_unique_count =
+        '(SELECT total_count FROM _profile_set_total) as total_count';
+    }
+
+    const sql = `${getWith()}${getSelect()} ${getFrom()} ${getJoins()} ${getWhere()} ${getGroupBy()} ${getOrderBy()} ${getFill()}`;
+    console.log('-- Profile Set Report --');
+    console.log(sql.replaceAll(/[\n\r]/g, ' '));
+    console.log('-- End --');
+    return sql;
+  }
+
   // Only count reports render the all-period unique-user total. Other report
   // metrics are derived from the time buckets, so their unique-user scan is
   // unused work and was the dominant cost on large dashboards.
@@ -785,14 +874,14 @@ export async function getChartSql({
     ucSelectParts.push('uniq(profile_id) as total_count');
 
     const ucGroupByParts = breakdowns.map(
-      (_, index) => `_uc_label_${index + 1}`
+      (_, index) => `_uc_label_${index + 1}`,
     );
 
     const ucWhere = getWhereWithoutBar();
 
     addCte(
       '_uc',
-      `SELECT ${ucSelectParts.join(', ')} FROM ${TABLE_NAMES.events} e ${subqueryGroupJoins}${profilesJoinRef ? `${profilesJoinRef} ` : ''}${inlineCohortJoinsSql ? `${inlineCohortJoinsSql} ` : ''}${inlineAllCohortsJoin}${ucWhere} GROUP BY ${ucGroupByParts.join(', ')}`
+      `SELECT ${ucSelectParts.join(', ')} FROM ${TABLE_NAMES.events} e ${subqueryGroupJoins}${profilesJoinRef ? `${profilesJoinRef} ` : ''}${inlineCohortJoinsSql ? `${inlineCohortJoinsSql} ` : ''}${inlineAllCohortsJoin}${ucWhere} GROUP BY ${ucGroupByParts.join(', ')}`,
     );
 
     const ucJoinConditions = breakdowns
@@ -820,7 +909,7 @@ export async function getChartSql({
 
     addCte(
       '_uc',
-      `SELECT uniq(profile_id) as total_count FROM ${TABLE_NAMES.events} e ${subqueryGroupJoins}${profilesJoinRef ? `${profilesJoinRef} ` : ''}${inlineCohortJoinsSql ? `${inlineCohortJoinsSql} ` : ''}${ucWhere}`
+      `SELECT uniq(profile_id) as total_count FROM ${TABLE_NAMES.events} e ${subqueryGroupJoins}${profilesJoinRef ? `${profilesJoinRef} ` : ''}${inlineCohortJoinsSql ? `${inlineCohortJoinsSql} ` : ''}${ucWhere}`,
     );
 
     sb.select.total_unique_count =
@@ -867,6 +956,11 @@ export async function getAggregateChartSql({
 
   const cohortIds = collectBreakdownCohortIds(breakdowns);
   const cohortMetadata = await fetchCohortsMetadata(cohortIds);
+  const profileSetEventNames = event.eventNames
+    ? [...new Set(event.eventNames.filter(Boolean))]
+    : [];
+  const isProfileSet =
+    profileSetEventNames.length >= 2 && event.setOperation !== undefined;
 
   // Add CTE + JOIN for "all cohorts" breakdown
   if (hasAllCohortsBreakdown) {
@@ -888,7 +982,12 @@ export async function getAggregateChartSql({
   sb.where = getEventFiltersWhereClause(event.filters, projectId, 'e');
   sb.where.projectId = `project_id = ${sqlstring.escape(projectId)}`;
 
-  if (event.name !== '*') {
+  if (isProfileSet) {
+    sb.select.label_0 = `${sqlstring.escape(event.displayName || event.name)} as label_0`;
+    sb.where.eventName = `e.name IN (${profileSetEventNames
+      .map((eventName) => sqlstring.escape(eventName))
+      .join(', ')})`;
+  } else if (event.name !== '*') {
     sb.select.label_0 = `${sqlstring.escape(event.name)} as label_0`;
     sb.where.eventName = `e.name = ${sqlstring.escape(event.name)}`;
   } else {
@@ -896,16 +995,16 @@ export async function getAggregateChartSql({
   }
 
   const anyFilterOnProfile = event.filters.some((filter) =>
-    filter.name.startsWith('profile.')
+    filter.name.startsWith('profile.'),
   );
   const anyBreakdownOnProfile = breakdowns.some((breakdown) =>
-    breakdown.name.startsWith('profile.')
+    breakdown.name.startsWith('profile.'),
   );
   const anyFilterOnGroup = event.filters.some((filter) =>
-    filter.name.startsWith('group.')
+    filter.name.startsWith('group.'),
   );
   const anyBreakdownOnGroup = breakdowns.some((breakdown) =>
-    breakdown.name.startsWith('group.')
+    breakdown.name.startsWith('group.'),
   );
   const anyMetricOnGroup = !!event.property?.startsWith('group.');
   const needsGroupArrayJoin =
@@ -917,7 +1016,7 @@ export async function getAggregateChartSql({
   if (needsGroupArrayJoin) {
     addCte(
       '_g',
-      `SELECT id, name, type, properties FROM ${TABLE_NAMES.groups} FINAL WHERE project_id = ${sqlstring.escape(projectId)}`
+      `SELECT id, name, type, properties FROM ${TABLE_NAMES.groups} FINAL WHERE project_id = ${sqlstring.escape(projectId)}`,
     );
     sb.joins.groups = 'ARRAY JOIN groups AS _group_id';
     sb.joins.groups_table = 'LEFT ANY JOIN _g ON _g.id = _group_id';
@@ -1012,7 +1111,7 @@ export async function getAggregateChartSql({
       'profile',
       `SELECT ${selectFields.join(', ')}
       FROM ${TABLE_NAMES.profiles} FINAL
-      WHERE project_id = ${sqlstring.escape(projectId)}`
+      WHERE project_id = ${sqlstring.escape(projectId)}`,
     );
 
     sb.joins.profiles = profilesJoinRef;
@@ -1051,6 +1150,45 @@ export async function getAggregateChartSql({
 
   // Always group by label_0 (event name) for aggregate charts
   sb.groupBy.label_0 = 'label_0';
+
+  if (isProfileSet && event.setOperation === 'intersection') {
+    const subqueryGroupJoins = needsGroupArrayJoin
+      ? 'ARRAY JOIN groups AS _group_id LEFT ANY JOIN _g ON _g.id = _group_id '
+      : '';
+    const inlineCohortJoinsSql = cohortIds
+      .map((id) => buildInlineCohortJoin(id, projectId, 'e'))
+      .join(' ');
+    const inlineAllCohortsJoin = hasAllCohortsBreakdown
+      ? `INNER JOIN (${buildAllCohortsMembershipQuery(projectId)}) AS _all_cohorts ON _all_cohorts.profile_id = e.profile_id `
+      : '';
+    const sourceJoins = `${subqueryGroupJoins}${profilesJoinRef ? `${profilesJoinRef} ` : ''}${inlineCohortJoinsSql ? `${inlineCohortJoinsSql} ` : ''}${inlineAllCohortsJoin}`;
+    const breakdownAliases = breakdowns.map((_, index) => `label_${index + 1}`);
+    const breakdownSelectParts = breakdownAliases.map(
+      (label) => sb.select[label]!,
+    );
+    const sourceWhere = Object.keys(sb.where).length
+      ? `WHERE ${join(sb.where, ' AND ')}`
+      : '';
+    const matchingProfilesSql = `SELECT profile_id, ${breakdownSelectParts.length > 0 ? `${breakdownSelectParts.join(', ')}, ` : ''}uniqExact(e.name) as matched_event_count FROM ${TABLE_NAMES.events} e ${sourceJoins}${sourceWhere} GROUP BY profile_id${breakdownAliases.length > 0 ? `, ${breakdownAliases.join(', ')}` : ''} HAVING matched_event_count = ${profileSetEventNames.length}`;
+
+    sb.from = `(${matchingProfilesSql}) AS _profile_set_members`;
+    sb.where = {};
+    sb.joins = {};
+    sb.select.count = 'count() as count';
+    for (const breakdownAlias of breakdownAliases) {
+      sb.select[breakdownAlias] = breakdownAlias;
+    }
+    sb.orderBy.count = 'count DESC';
+    if (limit) {
+      sb.limit = limit;
+    }
+
+    const sql = getSql();
+    console.log('-- Aggregate Profile Set Report --');
+    console.log(sql.replaceAll(/[\n\r]/g, ' '));
+    console.log('-- End --');
+    return sql;
+  }
 
   // Default count aggregation
   sb.select.count = 'count(*) as count';
@@ -1102,7 +1240,7 @@ export async function getAggregateChartSql({
     sb.from = `(
       SELECT DISTINCT ON (profile_id) * from ${TABLE_NAMES.events} e ${getJoins()} WHERE ${join(
         sb.where,
-        ' AND '
+        ' AND ',
       )}
         ORDER BY profile_id, created_at DESC
       ) as subQuery`;
@@ -1167,27 +1305,25 @@ export function getEventFiltersWhereClause(
     // `properties` column.
     const name =
       tableScope === 'sessions'
-        ? EVENT_FIELD_ALIASES[filter.name] ?? filter.name
+        ? (EVENT_FIELD_ALIASES[filter.name] ?? filter.name)
         : normalizeEventField(filter.name);
 
-    if (
-      (operator === 'inCohort' || operator === 'notInCohort') &&
-      projectId
-    ) {
+    if ((operator === 'inCohort' || operator === 'notInCohort') && projectId) {
       // Self-contained membership subselect — no caller JOIN wiring needed.
       // Cohort filters and cohort breakdowns are decoupled: the breakdown
       // path (getSelectPropertyKey) still uses a JOIN alias for SELECT
       // expressions, but filters never depend on it.
       const cohortIds = getCohortIds(filter);
-      if (cohortIds.length === 0) return;
+      if (cohortIds.length === 0) {
+        return;
+      }
       const profileIdExpr = eventsAlias
         ? `${eventsAlias}.profile_id`
         : 'profile_id';
       const op = operator === 'notInCohort' ? 'NOT IN' : 'IN';
-      const escapedIds = cohortIds
-        .map((c) => sqlstring.escape(c))
-        .join(', ');
-      where[id] = `${profileIdExpr} ${op} (SELECT profile_id FROM ${TABLE_NAMES.cohort_members} FINAL WHERE cohort_id IN (${escapedIds}) AND project_id = ${sqlstring.escape(projectId)})`;
+      const escapedIds = cohortIds.map((c) => sqlstring.escape(c)).join(', ');
+      where[id] =
+        `${profileIdExpr} ${op} (SELECT profile_id FROM ${TABLE_NAMES.cohort_members} FINAL WHERE cohort_id IN (${escapedIds}) AND project_id = ${sqlstring.escape(projectId)})`;
       return;
     }
 
@@ -1318,14 +1454,15 @@ export function getEventFiltersWhereClause(
           if (isWildcard) {
             where[id] = `arrayExists(x -> ${value
               .map(
-                (val) => `x LIKE ${sqlstring.escape(`%${String(val).trim()}%`)}`
+                (val) =>
+                  `x LIKE ${sqlstring.escape(`%${String(val).trim()}%`)}`,
               )
               .join(' OR ')}, ${whereFrom})`;
           } else {
             where[id] = `(${value
               .map(
                 (val) =>
-                  `${whereFrom} LIKE ${sqlstring.escape(`%${String(val).trim()}%`)}`
+                  `${whereFrom} LIKE ${sqlstring.escape(`%${String(val).trim()}%`)}`,
               )
               .join(' OR ')})`;
           }
@@ -1336,14 +1473,14 @@ export function getEventFiltersWhereClause(
             where[id] = `arrayExists(x -> ${value
               .map(
                 (val) =>
-                  `x NOT LIKE ${sqlstring.escape(`%${String(val).trim()}%`)}`
+                  `x NOT LIKE ${sqlstring.escape(`%${String(val).trim()}%`)}`,
               )
               .join(' OR ')}, ${whereFrom})`;
           } else {
             where[id] = `(${value
               .map(
                 (val) =>
-                  `${whereFrom} NOT LIKE ${sqlstring.escape(`%${String(val).trim()}%`)}`
+                  `${whereFrom} NOT LIKE ${sqlstring.escape(`%${String(val).trim()}%`)}`,
               )
               .join(' OR ')})`;
           }
@@ -1353,14 +1490,14 @@ export function getEventFiltersWhereClause(
           if (isWildcard) {
             where[id] = `arrayExists(x -> ${value
               .map(
-                (val) => `x LIKE ${sqlstring.escape(`${String(val).trim()}%`)}`
+                (val) => `x LIKE ${sqlstring.escape(`${String(val).trim()}%`)}`,
               )
               .join(' OR ')}, ${whereFrom})`;
           } else {
             where[id] = `(${value
               .map(
                 (val) =>
-                  `${whereFrom} LIKE ${sqlstring.escape(`${String(val).trim()}%`)}`
+                  `${whereFrom} LIKE ${sqlstring.escape(`${String(val).trim()}%`)}`,
               )
               .join(' OR ')})`;
           }
@@ -1370,14 +1507,14 @@ export function getEventFiltersWhereClause(
           if (isWildcard) {
             where[id] = `arrayExists(x -> ${value
               .map(
-                (val) => `x LIKE ${sqlstring.escape(`%${String(val).trim()}`)}`
+                (val) => `x LIKE ${sqlstring.escape(`%${String(val).trim()}`)}`,
               )
               .join(' OR ')}, ${whereFrom})`;
           } else {
             where[id] = `(${value
               .map(
                 (val) =>
-                  `${whereFrom} LIKE ${sqlstring.escape(`%${String(val).trim()}`)}`
+                  `${whereFrom} LIKE ${sqlstring.escape(`%${String(val).trim()}`)}`,
               )
               .join(' OR ')})`;
           }
@@ -1392,7 +1529,7 @@ export function getEventFiltersWhereClause(
             where[id] = `(${value
               .map(
                 (val) =>
-                  `match(${whereFrom}, ${sqlstring.escape(String(val).trim())})`
+                  `match(${whereFrom}, ${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')})`;
           }
@@ -1420,14 +1557,14 @@ export function getEventFiltersWhereClause(
             where[id] = `arrayExists(x -> ${value
               .map(
                 (val) =>
-                  `toFloat64OrZero(x) > toFloat64(${sqlstring.escape(String(val).trim())})`
+                  `toFloat64OrZero(x) > toFloat64(${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')}, ${whereFrom})`;
           } else {
             where[id] = `(${value
               .map(
                 (val) =>
-                  `toFloat64OrZero(${whereFrom}) > toFloat64(${sqlstring.escape(String(val).trim())})`
+                  `toFloat64OrZero(${whereFrom}) > toFloat64(${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')})`;
           }
@@ -1438,14 +1575,14 @@ export function getEventFiltersWhereClause(
             where[id] = `arrayExists(x -> ${value
               .map(
                 (val) =>
-                  `toFloat64OrZero(x) < toFloat64(${sqlstring.escape(String(val).trim())})`
+                  `toFloat64OrZero(x) < toFloat64(${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')}, ${whereFrom})`;
           } else {
             where[id] = `(${value
               .map(
                 (val) =>
-                  `toFloat64OrZero(${whereFrom}) < toFloat64(${sqlstring.escape(String(val).trim())})`
+                  `toFloat64OrZero(${whereFrom}) < toFloat64(${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')})`;
           }
@@ -1456,14 +1593,14 @@ export function getEventFiltersWhereClause(
             where[id] = `arrayExists(x -> ${value
               .map(
                 (val) =>
-                  `toFloat64OrZero(x) >= toFloat64(${sqlstring.escape(String(val).trim())})`
+                  `toFloat64OrZero(x) >= toFloat64(${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')}, ${whereFrom})`;
           } else {
             where[id] = `(${value
               .map(
                 (val) =>
-                  `toFloat64OrZero(${whereFrom}) >= toFloat64(${sqlstring.escape(String(val).trim())})`
+                  `toFloat64OrZero(${whereFrom}) >= toFloat64(${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')})`;
           }
@@ -1474,14 +1611,14 @@ export function getEventFiltersWhereClause(
             where[id] = `arrayExists(x -> ${value
               .map(
                 (val) =>
-                  `toFloat64OrZero(x) <= toFloat64(${sqlstring.escape(String(val).trim())})`
+                  `toFloat64OrZero(x) <= toFloat64(${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')}, ${whereFrom})`;
           } else {
             where[id] = `(${value
               .map(
                 (val) =>
-                  `toFloat64OrZero(${whereFrom}) <= toFloat64(${sqlstring.escape(String(val).trim())})`
+                  `toFloat64OrZero(${whereFrom}) <= toFloat64(${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')})`;
           }
@@ -1533,7 +1670,7 @@ export function getEventFiltersWhereClause(
           where[id] = `(${value
             .map(
               (val) =>
-                `${name} LIKE ${sqlstring.escape(`%${String(val).trim()}%`)}`
+                `${name} LIKE ${sqlstring.escape(`%${String(val).trim()}%`)}`,
             )
             .join(' OR ')})`;
           break;
@@ -1542,7 +1679,7 @@ export function getEventFiltersWhereClause(
           where[id] = `(${value
             .map(
               (val) =>
-                `${name} NOT LIKE ${sqlstring.escape(`%${String(val).trim()}%`)}`
+                `${name} NOT LIKE ${sqlstring.escape(`%${String(val).trim()}%`)}`,
             )
             .join(' OR ')})`;
           break;
@@ -1551,7 +1688,7 @@ export function getEventFiltersWhereClause(
           where[id] = `(${value
             .map(
               (val) =>
-                `${name} LIKE ${sqlstring.escape(`${String(val).trim()}%`)}`
+                `${name} LIKE ${sqlstring.escape(`${String(val).trim()}%`)}`,
             )
             .join(' OR ')})`;
           break;
@@ -1560,7 +1697,7 @@ export function getEventFiltersWhereClause(
           where[id] = `(${value
             .map(
               (val) =>
-                `${name} LIKE ${sqlstring.escape(`%${String(val).trim()}`)}`
+                `${name} LIKE ${sqlstring.escape(`%${String(val).trim()}`)}`,
             )
             .join(' OR ')})`;
           break;
@@ -1569,7 +1706,7 @@ export function getEventFiltersWhereClause(
           where[id] = `(${value
             .map(
               (val) =>
-                `match(${name}, ${sqlstring.escape(stripLeadingAndTrailingSlashes(String(val)).trim())})`
+                `match(${name}, ${sqlstring.escape(stripLeadingAndTrailingSlashes(String(val)).trim())})`,
             )
             .join(' OR ')})`;
           break;
@@ -1579,7 +1716,7 @@ export function getEventFiltersWhereClause(
             where[id] = `(${value
               .map(
                 (val) =>
-                  `toFloat64(${name}) > toFloat64(${sqlstring.escape(String(val).trim())})`
+                  `toFloat64(${name}) > toFloat64(${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')})`;
           } else {
@@ -1594,7 +1731,7 @@ export function getEventFiltersWhereClause(
             where[id] = `(${value
               .map(
                 (val) =>
-                  `toFloat64(${name}) < toFloat64(${sqlstring.escape(String(val).trim())})`
+                  `toFloat64(${name}) < toFloat64(${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')})`;
           } else {
@@ -1609,13 +1746,13 @@ export function getEventFiltersWhereClause(
             where[id] = `(${value
               .map(
                 (val) =>
-                  `toFloat64(${name}) >= toFloat64(${sqlstring.escape(String(val).trim())})`
+                  `toFloat64(${name}) >= toFloat64(${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')})`;
           } else {
             where[id] = `(${value
               .map(
-                (val) => `${name} >= ${sqlstring.escape(String(val).trim())}`
+                (val) => `${name} >= ${sqlstring.escape(String(val).trim())}`,
               )
               .join(' OR ')})`;
           }
@@ -1626,13 +1763,13 @@ export function getEventFiltersWhereClause(
             where[id] = `(${value
               .map(
                 (val) =>
-                  `toFloat64(${name}) <= toFloat64(${sqlstring.escape(String(val).trim())})`
+                  `toFloat64(${name}) <= toFloat64(${sqlstring.escape(String(val).trim())})`,
               )
               .join(' OR ')})`;
           } else {
             where[id] = `(${value
               .map(
-                (val) => `${name} <= ${sqlstring.escape(String(val).trim())}`
+                (val) => `${name} <= ${sqlstring.escape(String(val).trim())}`,
               )
               .join(' OR ')})`;
           }

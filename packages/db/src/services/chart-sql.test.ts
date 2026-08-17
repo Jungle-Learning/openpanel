@@ -176,18 +176,21 @@ describe('chart.service / getChartSql', () => {
     await explain(sql);
   });
 
-  itCH('skips WITH FILL when endDate equals startDate inverted (week)', async () => {
-    const sql = await getChartSql({
-      event: event(),
-      breakdowns: [],
-      interval: 'week',
-      startDate: END,
-      endDate: START,
-      projectId: PROJECT_ID,
-      timezone: 'UTC',
-    });
-    expect(sql).not.toContain('WITH FILL');
-  });
+  itCH(
+    'skips WITH FILL when endDate equals startDate inverted (week)',
+    async () => {
+      const sql = await getChartSql({
+        event: event(),
+        breakdowns: [],
+        interval: 'week',
+        startDate: END,
+        endDate: START,
+        projectId: PROJECT_ID,
+        timezone: 'UTC',
+      });
+      expect(sql).not.toContain('WITH FILL');
+    },
+  );
 
   itCH('emits WITH FILL when the range is valid', async () => {
     const sql = await getChartSql({
@@ -203,23 +206,26 @@ describe('chart.service / getChartSql', () => {
     await explain(sql);
   });
 
-  itCH('property metric (property_sum) with group join is unambiguous', async () => {
-    const sql = await getChartSql({
-      event: event({
-        segment: 'property_sum',
-        property: 'properties.revenue_amount',
-        filters: [{ name: 'group.plan', operator: 'is', value: ['pro'] }],
-      }),
-      breakdowns: [],
-      interval: 'day',
-      startDate: START,
-      endDate: END,
-      projectId: PROJECT_ID,
-      timezone: 'UTC',
-    });
-    expect(sql).toContain("e.properties['revenue_amount']");
-    await explain(sql);
-  });
+  itCH(
+    'property metric (property_sum) with group join is unambiguous',
+    async () => {
+      const sql = await getChartSql({
+        event: event({
+          segment: 'property_sum',
+          property: 'properties.revenue_amount',
+          filters: [{ name: 'group.plan', operator: 'is', value: ['pro'] }],
+        }),
+        breakdowns: [],
+        interval: 'day',
+        startDate: START,
+        endDate: END,
+        projectId: PROJECT_ID,
+        timezone: 'UTC',
+      });
+      expect(sql).toContain("e.properties['revenue_amount']");
+      await explain(sql);
+    },
+  );
 
   itCH('one_event_per_user segment still parses', async () => {
     const sql = await getChartSql({
@@ -242,9 +248,7 @@ describe('chart.service / getChartSql', () => {
     async () => {
       const sql = await getChartSql({
         event: event({
-          filters: [
-            { name: 'referrerName', operator: 'is', value: ['email'] },
-          ],
+          filters: [{ name: 'referrerName', operator: 'is', value: ['email'] }],
         }),
         breakdowns: [],
         interval: 'day',
@@ -259,26 +263,23 @@ describe('chart.service / getChartSql', () => {
     },
   );
 
-  itCH(
-    'routes bare utm_source filter through properties map',
-    async () => {
-      const sql = await getChartSql({
-        event: event({
-          filters: [{ name: 'utm_source', operator: 'is', value: ['awn'] }],
-        }),
-        breakdowns: [],
-        interval: 'day',
-        startDate: START,
-        endDate: END,
-        projectId: PROJECT_ID,
-        timezone: 'UTC',
-      });
-      expect(sql).toContain("properties['__query.utm_source']");
-      // The unqualified `utm_source = …` form would fail with UNKNOWN_IDENTIFIER.
-      expect(sql).not.toMatch(/(?<![._\w])utm_source\s*=/);
-      await explain(sql);
-    },
-  );
+  itCH('routes bare utm_source filter through properties map', async () => {
+    const sql = await getChartSql({
+      event: event({
+        filters: [{ name: 'utm_source', operator: 'is', value: ['awn'] }],
+      }),
+      breakdowns: [],
+      interval: 'day',
+      startDate: START,
+      endDate: END,
+      projectId: PROJECT_ID,
+      timezone: 'UTC',
+    });
+    expect(sql).toContain("properties['__query.utm_source']");
+    // The unqualified `utm_source = …` form would fail with UNKNOWN_IDENTIFIER.
+    expect(sql).not.toMatch(/(?<![._\w])utm_source\s*=/);
+    await explain(sql);
+  });
 
   itCH(
     'drops unknown breakdown rather than emitting invalid identifier',
@@ -301,12 +302,35 @@ describe('chart.service / getChartSql', () => {
     },
   );
 
-  itCH('drops unknown filter rather than emitting invalid identifier', async () => {
+  itCH(
+    'drops unknown filter rather than emitting invalid identifier',
+    async () => {
+      const sql = await getChartSql({
+        event: event({
+          filters: [
+            { name: 'totally_made_up_column', operator: 'is', value: ['x'] },
+          ],
+        }),
+        breakdowns: [],
+        interval: 'day',
+        startDate: START,
+        endDate: END,
+        projectId: PROJECT_ID,
+        timezone: 'UTC',
+      });
+      expect(sql).not.toMatch(/totally_made_up_column/);
+      await explain(sql);
+    },
+  );
+
+  it('queries a profile union as distinct users across its source events', async () => {
     const sql = await getChartSql({
       event: event({
-        filters: [
-          { name: 'totally_made_up_column', operator: 'is', value: ['x'] },
-        ],
+        name: 'Active Action',
+        displayName: 'Active Action',
+        segment: 'user',
+        eventNames: ['answer', 'generation', 'voice'],
+        setOperation: 'union',
       }),
       breakdowns: [],
       interval: 'day',
@@ -314,9 +338,41 @@ describe('chart.service / getChartSql', () => {
       endDate: END,
       projectId: PROJECT_ID,
       timezone: 'UTC',
+      metric: 'count',
     });
-    expect(sql).not.toMatch(/totally_made_up_column/);
-    await explain(sql);
+
+    expect(sql).toContain("e.name IN ('answer', 'generation', 'voice')");
+    expect(sql).toContain('countDistinct(profile_id) as count');
+    expect(sql).toContain("'Active Action' as label_0");
+    if (chReachable) {
+      await explain(sql);
+    }
+  });
+
+  it('queries a profile intersection before counting each time bucket', async () => {
+    const sql = await getChartSql({
+      event: event({
+        name: 'INTERSECTION(A, B)',
+        segment: 'user',
+        eventNames: ['answer', 'generation'],
+        setOperation: 'intersection',
+      }),
+      breakdowns: [],
+      interval: 'month',
+      startDate: START,
+      endDate: END,
+      projectId: PROJECT_ID,
+      timezone: 'UTC',
+      metric: 'count',
+    });
+
+    expect(sql).toContain('uniqExact(e.name) as matched_event_count');
+    expect(sql).toContain('HAVING matched_event_count = 2');
+    expect(sql).toContain('AS _profile_set_members');
+    expect(sql).toMatch(/SELECT .*count\(\) as count, date/);
+    if (chReachable) {
+      await explain(sql);
+    }
   });
 });
 
@@ -348,6 +404,29 @@ describe('chart.service / getAggregateChartSql', () => {
     expect(sql).toContain("e.properties['__query.utm_source']");
     await explain(sql);
   });
+
+  it('queries an aggregate profile intersection before counting', async () => {
+    const sql = await getAggregateChartSql({
+      event: event({
+        name: 'INTERSECTION(A, B)',
+        segment: 'user',
+        eventNames: ['answer', 'generation'],
+        setOperation: 'intersection',
+      }),
+      breakdowns: [],
+      startDate: START,
+      endDate: END,
+      projectId: PROJECT_ID,
+      timezone: 'UTC',
+    });
+
+    expect(sql).toContain('uniqExact(e.name) as matched_event_count');
+    expect(sql).toContain('HAVING matched_event_count = 2');
+    expect(sql).toContain('count() as count');
+    if (chReachable) {
+      await explain(sql);
+    }
+  });
 });
 
 describe('overview.service / getRawWhereClause (UTM remapping)', () => {
@@ -376,23 +455,29 @@ describe('overview.service / getRawWhereClause (UTM remapping)', () => {
     expect(where).toBe('');
   });
 
-  itCH('events utm_source filter parses against real events table', async () => {
-    const where = svc.getRawWhereClause('events', [
-      { name: 'utm_source', operator: 'is', value: ['awn'] },
-    ]);
-    expect(where).toBeTruthy();
-    await explain(
-      `SELECT count() FROM events WHERE project_id = '${PROJECT_ID}' AND ${where}`,
-    );
-  });
+  itCH(
+    'events utm_source filter parses against real events table',
+    async () => {
+      const where = svc.getRawWhereClause('events', [
+        { name: 'utm_source', operator: 'is', value: ['awn'] },
+      ]);
+      expect(where).toBeTruthy();
+      await explain(
+        `SELECT count() FROM events WHERE project_id = '${PROJECT_ID}' AND ${where}`,
+      );
+    },
+  );
 
-  itCH('sessions utm_source filter parses against real sessions table', async () => {
-    const where = svc.getRawWhereClause('sessions', [
-      { name: 'utm_source', operator: 'is', value: ['awn'] },
-    ]);
-    expect(where).toBeTruthy();
-    await explain(
-      `SELECT count() FROM sessions WHERE project_id = '${PROJECT_ID}' AND ${where}`,
-    );
-  });
+  itCH(
+    'sessions utm_source filter parses against real sessions table',
+    async () => {
+      const where = svc.getRawWhereClause('sessions', [
+        { name: 'utm_source', operator: 'is', value: ['awn'] },
+      ]);
+      expect(where).toBeTruthy();
+      await explain(
+        `SELECT count() FROM sessions WHERE project_id = '${PROJECT_ID}' AND ${where}`,
+      );
+    },
+  );
 });

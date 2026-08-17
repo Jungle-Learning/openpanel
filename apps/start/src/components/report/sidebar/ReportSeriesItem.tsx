@@ -1,13 +1,13 @@
-import { ColorSquare } from '@/components/color-square';
-import { useDispatch } from '@/redux';
 import { shortId } from '@openpanel/common';
 import { alphabetIds } from '@openpanel/constants';
 import type { IChartEvent, IChartEventItem } from '@openpanel/validation';
 import { DatabaseIcon, FilterIcon, type LucideIcon } from 'lucide-react';
 import { ReportSegment } from '../ReportSegment';
 import { changeEvent } from '../reportSlice';
-import { PropertiesCombobox } from './PropertiesCombobox';
 import { FiltersList } from './filters/FiltersList';
+import { PropertiesCombobox } from './PropertiesCombobox';
+import { ColorSquare } from '@/components/color-square';
+import { useDispatch } from '@/redux';
 
 export interface ReportSeriesItemProps
   extends React.HTMLAttributes<HTMLDivElement> {
@@ -38,10 +38,11 @@ export function ReportSeriesItem({
   const chartEvent = isFormula
     ? null
     : (normalizedEvent as IChartEventItem & { type: 'event' });
+  const isCustomEvent = !!chartEvent?.customEventId;
 
   return (
     <div {...props}>
-      <div className="flex items-center gap-2 p-2 group">
+      <div className="group flex items-center gap-2 p-2">
         {renderDragHandle ? (
           renderDragHandle(index)
         ) : (
@@ -53,11 +54,10 @@ export function ReportSeriesItem({
       </div>
 
       {/* Segment and Filter buttons - only for events */}
-      {chartEvent && (showSegment || showAddFilter) && (
+      {chartEvent && !isCustomEvent && (showSegment || showAddFilter) && (
         <div className="flex gap-2 p-2 pt-0">
           {showSegment && (
             <ReportSegment
-              value={chartEvent.segment}
               onChange={(segment) => {
                 dispatch(
                   changeEvent({
@@ -66,12 +66,13 @@ export function ReportSeriesItem({
                   }),
                 );
               }}
+              value={chartEvent.segment}
             />
           )}
           {showAddFilter && (
             <PropertiesCombobox
-              event={chartEvent}
               categories={['event', 'profile', 'group', 'cohort']}
+              event={chartEvent}
               onSelect={(action) => {
                 const isCohortAction = action.value === 'cohort';
                 if (
@@ -109,8 +110,8 @@ export function ReportSeriesItem({
             >
               {(setOpen) => (
                 <SmallButton
-                  onClick={() => setOpen((p) => !p)}
                   icon={FilterIcon}
+                  onClick={() => setOpen((p) => !p)}
                 >
                   Add filter
                 </SmallButton>
@@ -120,8 +121,8 @@ export function ReportSeriesItem({
 
           {showSegment && chartEvent.segment.startsWith('property_') && (
             <PropertiesCombobox
-              include={chartEvent.name === 'session_end' ? ['duration'] : []}
               event={chartEvent}
+              include={chartEvent.name === 'session_end' ? ['duration'] : []}
               onSelect={(item) => {
                 dispatch(
                   changeEvent({
@@ -148,7 +149,9 @@ export function ReportSeriesItem({
       )}
 
       {/* Filters - only for events */}
-      {chartEvent && !isSelectManyEvents && <FiltersList event={chartEvent} />}
+      {chartEvent && !isCustomEvent && !isSelectManyEvents && (
+        <FiltersList event={chartEvent} />
+      )}
     </div>
   );
 }
@@ -163,11 +166,11 @@ function SmallButton({
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
+      className="flex min-w-0 items-center gap-1 rounded-md border border-border bg-card p-1 px-2 text-left font-medium text-sm leading-none"
       type="button"
-      className="flex items-center gap-1 rounded-md border border-border bg-card p-1 px-2 text-sm font-medium leading-none text-left min-w-0"
       {...props}
     >
-      <Icon size={12} className="shrink-0" />
+      <Icon className="shrink-0" size={12} />
       <span className="truncate">{children}</span>
     </button>
   );

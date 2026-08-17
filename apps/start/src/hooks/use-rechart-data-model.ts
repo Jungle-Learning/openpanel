@@ -1,6 +1,7 @@
 import type { IChartData } from '@/trpc/client';
 import { getChartColor } from '@/utils/theme';
 import { useMemo } from 'react';
+import { parseChartDate } from './use-format-date-interval';
 
 export type IRechartPayloadItem = {
   id: string;
@@ -22,7 +23,7 @@ export function useRechartDataModel(series: IChartData['series']) {
       series[0]?.data.map(({ date }) => {
         return {
           date,
-          timestamp: new Date(date).getTime(),
+          timestamp: parseChartDate(date).getTime(),
           ...series.reduce((acc, serie, idx) => {
             return {
               ...acc,

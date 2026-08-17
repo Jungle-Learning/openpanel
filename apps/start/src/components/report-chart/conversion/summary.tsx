@@ -13,10 +13,14 @@ import {
 
 import { useNumber } from '@/hooks/use-numer-formatter';
 import { formatDate } from '@/utils/date';
+import { parseChartDate } from '@/hooks/use-format-date-interval';
 import { average, sum } from '@openpanel/common';
 import { useReportChartContext } from '../context';
 
-const SUMMARY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+const SUMMARY_ICONS: Record<
+  string,
+  React.ComponentType<{ className?: string }>
+> = {
   Flow: GitBranch,
   'Average conversion rate': Percent,
   'Total conversions': Target,
@@ -172,8 +176,8 @@ export function Summary({ data }: Props) {
       items.push({
         name: 'Best conversion rate',
         value: breakdowns
-          ? `${number.formatWithUnit(bestConversionRate.rate / 100, '%')} on ${breakdowns} at ${formatDate(new Date(bestConversionRate.date))}`
-          : `${number.formatWithUnit(bestConversionRate.rate / 100, '%')} at ${formatDate(new Date(bestConversionRate.date))}`,
+          ? `${number.formatWithUnit(bestConversionRate.rate / 100, '%')} on ${breakdowns} at ${formatDate(parseChartDate(bestConversionRate.date))}`
+          : `${number.formatWithUnit(bestConversionRate.rate / 100, '%')} at ${formatDate(parseChartDate(bestConversionRate.date))}`,
       });
     }
     if (worstConversionRate) {
@@ -181,8 +185,8 @@ export function Summary({ data }: Props) {
       items.push({
         name: 'Worst conversion rate',
         value: breakdowns
-          ? `${number.formatWithUnit(worstConversionRate.rate / 100, '%')} on ${breakdowns} at ${formatDate(new Date(worstConversionRate.date))}`
-          : `${number.formatWithUnit(worstConversionRate.rate / 100, '%')} at ${formatDate(new Date(worstConversionRate.date))}`,
+          ? `${number.formatWithUnit(worstConversionRate.rate / 100, '%')} on ${breakdowns} at ${formatDate(parseChartDate(worstConversionRate.date))}`
+          : `${number.formatWithUnit(worstConversionRate.rate / 100, '%')} at ${formatDate(parseChartDate(worstConversionRate.date))}`,
       });
     }
     return items;

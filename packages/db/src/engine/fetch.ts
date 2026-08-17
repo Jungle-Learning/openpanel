@@ -4,6 +4,11 @@ import { alphabetIds } from '@openpanel/constants';
 import type { IGetChartDataInput } from '@openpanel/validation';
 import { chQuery } from '../clickhouse/client';
 import { getChartSql } from '../services/chart.service';
+import {
+  isProfileSetDefinition,
+  isQueryBackedDefinition,
+  toQueryEvent,
+} from './profile-set';
 import type { ConcreteSeries, Plan } from './types';
 
 /**
@@ -17,12 +22,12 @@ export async function fetch(plan: Plan): Promise<ConcreteSeries[]> {
   for (let i = 0; i < plan.definitions.length; i++) {
     const definition = plan.definitions[i]!;
 
-    if (definition.type !== 'event') {
+    if (!isQueryBackedDefinition(definition)) {
       // Skip formulas - they'll be handled in compute stage
       continue;
     }
 
-    const event = definition as typeof definition & { type: 'event' };
+    const event = toQueryEvent(definition);
 
     // Find the corresponding concrete series placeholder
     const placeholder = plan.concreteSeries.find(
@@ -42,6 +47,8 @@ export async function fetch(plan: Plan): Promise<ConcreteSeries[]> {
         filters: event.filters,
         displayName: event.displayName,
         property: event.property,
+        eventNames: event.eventNames,
+        setOperation: event.setOperation,
       },
       projectId: plan.input.projectId,
       startDate: plan.input.startDate,
@@ -127,7 +134,7 @@ export async function fetch(plan: Plan): Promise<ConcreteSeries[]> {
         definitionIndex: i,
         name: grouped.name,
         context: {
-          event: event.name,
+          event: isProfileSetDefinition(definition) ? undefined : event.name,
           filters,
           breakdownValue,
           breakdowns,

@@ -1,4 +1,5 @@
 import { fancyMinutes, useNumber } from '@/hooks/use-numer-formatter';
+import { parseChartDate } from '@/hooks/use-format-date-interval';
 import type { IChartData } from '@/trpc/client';
 import { cn } from '@/utils/cn';
 import AutoSizer from 'react-virtualized-auto-sizer';
@@ -36,7 +37,7 @@ const TooltipContent = (props: { payload?: any[] }) => {
         return (
           <div key={item.id} className="col gap-2">
             <ChartTooltipHeader>
-              <div>{formatDate(new Date(date))}</div>
+              <div>{formatDate(parseChartDate(date))}</div>
             </ChartTooltipHeader>
             <ChartTooltipItem color={getChartColor(0)}>
               <div>{number.format(count)}</div>

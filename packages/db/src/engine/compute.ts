@@ -2,6 +2,7 @@ import { round } from '@openpanel/common';
 import { alphabetIds } from '@openpanel/constants';
 import type { IChartFormula } from '@openpanel/validation';
 import * as mathjs from 'mathjs';
+import { isProfileSetDefinition } from './profile-set';
 import type { ConcreteSeries } from './types';
 
 /**
@@ -21,6 +22,12 @@ export function compute(
   // Process formulas in order (they can reference previous formulas)
   definitions.forEach((definition, formulaIndex) => {
     if (definition.type !== 'formula') {
+      return;
+    }
+
+    if (isProfileSetDefinition(definition as IChartFormula)) {
+      // Set formulas are computed by ClickHouse from profile membership, not
+      // by applying mathjs to already-aggregated scalar values.
       return;
     }
 

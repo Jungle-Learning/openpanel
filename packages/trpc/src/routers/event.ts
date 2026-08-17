@@ -1,11 +1,4 @@
-import { TRPCError } from '@trpc/server';
-import sqlstring from 'sqlstring';
-import { z } from 'zod';
-
 import {
-  type IServiceProfile,
-  type IServiceSession,
-  TABLE_NAMES,
   chQuery,
   convertClickhouseDateToJs,
   db,
@@ -15,21 +8,104 @@ import {
   getEventList,
   getEventMetasCached,
   getSettingsForProject,
+  type IServiceProfile,
+  type IServiceSession,
   pagesService,
   sessionService,
+  TABLE_NAMES,
 } from '@openpanel/db';
 import {
   zChartEventFilter,
+  zCreateCustomEvent,
   zRange,
   zTimeInterval,
 } from '@openpanel/validation';
-
+import { TRPCError } from '@trpc/server';
 import { clone } from 'ramda';
+import sqlstring from 'sqlstring';
+import { z } from 'zod';
 import { getProjectAccess } from '../access';
-import { TRPCAccessError } from '../errors';
+import { TRPCAccessError, TRPCBadRequestError } from '../errors';
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '../trpc';
 
 export const eventRouter = createTRPCRouter({
+  customEvents: protectedProcedure
+    .input(z.object({ projectId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const access = await getProjectAccess({
+        projectId: input.projectId,
+        userId: ctx.session.userId,
+      });
+      if (!access) {
+        throw TRPCAccessError('You do not have access to this project');
+      }
+
+      return db.customEvent.findMany({
+        where: { projectId: input.projectId },
+        orderBy: { name: 'asc' },
+      });
+    }),
+
+  createCustomEvent: protectedProcedure
+    .input(zCreateCustomEvent)
+    .mutation(async ({ input, ctx }) => {
+      const access = await getProjectAccess({
+        projectId: input.projectId,
+        userId: ctx.session.userId,
+      });
+      if (!access) {
+        throw TRPCAccessError('You do not have access to this project');
+      }
+
+      const existingCustomEvent = await db.customEvent.findUnique({
+        where: {
+          name_projectId: {
+            name: input.name,
+            projectId: input.projectId,
+          },
+        },
+      });
+      if (existingCustomEvent) {
+        throw TRPCBadRequestError(
+          `A custom event named “${input.name}” already exists`,
+        );
+      }
+
+      const sourceEventNames = await chQuery<{ name: string }>(
+        `SELECT DISTINCT name FROM ${TABLE_NAMES.event_names_mv} WHERE project_id = ${sqlstring.escape(input.projectId)} AND name IN (${input.eventNames.map((eventName) => sqlstring.escape(eventName)).join(', ')})`,
+      );
+      const existingSourceNames = new Set(
+        sourceEventNames.map((event) => event.name),
+      );
+      const missingSourceNames = input.eventNames.filter(
+        (eventName) => !existingSourceNames.has(eventName),
+      );
+      if (missingSourceNames.length > 0) {
+        throw TRPCBadRequestError(
+          `Source event${missingSourceNames.length === 1 ? '' : 's'} not found: ${missingSourceNames.join(', ')}`,
+        );
+      }
+
+      const trackedEventWithSameName = await chQuery<{ name: string }>(
+        `SELECT name FROM ${TABLE_NAMES.event_names_mv} WHERE project_id = ${sqlstring.escape(input.projectId)} AND name = ${sqlstring.escape(input.name)} LIMIT 1`,
+      );
+      if (trackedEventWithSameName.length > 0 || input.name === '*') {
+        throw TRPCBadRequestError(
+          `“${input.name}” is already used by a tracked event`,
+        );
+      }
+
+      return db.customEvent.create({
+        data: {
+          projectId: input.projectId,
+          name: input.name,
+          description: input.description || null,
+          operation: input.operation,
+          eventNames: input.eventNames,
+        },
+      });
+    }),
+
   updateEventMeta: protectedProcedure
     .input(
       z.object({
@@ -390,8 +466,7 @@ export const eventRouter = createTRPCRouter({
 
       const prevEnd = new Date(startMs - 1);
       const prevStart = new Date(prevEnd.getTime() - duration);
-      const fmt = (d: Date) =>
-        d.toISOString().slice(0, 19).replace('T', ' ');
+      const fmt = (d: Date) => d.toISOString().slice(0, 19).replace('T', ' ');
 
       return pagesService.getTopPages({
         projectId: input.projectId,
@@ -438,6 +513,8 @@ export const eventRouter = createTRPCRouter({
         )} AND origin IS NOT NULL AND origin != '' AND toDate(created_at) > now() - INTERVAL 30 DAY GROUP BY origin ORDER BY count DESC LIMIT 3`,
       );
 
-      return res.filter((item) => item.origin && !item.origin.includes('localhost:'));
+      return res.filter(
+        (item) => item.origin && !item.origin.includes('localhost:'),
+      );
     }),
 });

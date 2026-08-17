@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 import {
   chartSegments,
   chartTypes,
@@ -9,6 +7,8 @@ import {
   operators,
   timeWindows,
 } from '@openpanel/constants';
+import { z } from 'zod';
+import { profileSetOperations } from './profile-set-formula';
 
 export function objectToZodEnums<K extends string>(
   obj: Record<K, any>,
@@ -91,6 +91,21 @@ export const zChartEvent = z.object({
     .array(zChartEventFilter)
     .default([])
     .describe('Filters applied specifically to this event'),
+  customEventId: z
+    .string()
+    .uuid()
+    .optional()
+    .describe('Saved query-time custom event identifier'),
+  eventNames: z
+    .array(z.string().min(1))
+    .min(2)
+    .max(10)
+    .optional()
+    .describe('Source event names for a query-time profile set'),
+  setOperation: z
+    .enum(profileSetOperations)
+    .optional()
+    .describe('How source-event profile sets are combined'),
 });
 
 export const zChartFormula = z.object({
@@ -110,7 +125,32 @@ export const zChartFormula = z.object({
     .describe(
       'Alpha IDs (e.g. ["A", "B"]) of series referenced by this formula that should be hidden from the chart while still being used in the formula computation',
     ),
+  eventNames: z
+    .array(z.string().min(1))
+    .min(2)
+    .max(10)
+    .optional()
+    .describe('Resolved source events for a query-time profile set formula'),
+  setOperation: z
+    .enum(profileSetOperations)
+    .optional()
+    .describe('Resolved operation for a query-time profile set formula'),
 });
+
+export const zCreateCustomEvent = z.object({
+  projectId: z.string().min(1),
+  name: z.string().trim().min(1).max(80),
+  description: z.string().trim().max(240).optional(),
+  operation: z.enum(profileSetOperations),
+  eventNames: z
+    .array(z.string().trim().min(1))
+    .min(2)
+    .max(10)
+    .refine((eventNames) => new Set(eventNames).size === eventNames.length, {
+      message: 'Source events must be unique',
+    }),
+});
+export type ICreateCustomEvent = z.infer<typeof zCreateCustomEvent>;
 
 // Event with type field for discriminated union
 export const zChartEventWithType = zChartEvent.extend({
@@ -343,7 +383,7 @@ export const zOnboardingProject = z
     timezone: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    if (!data.organization && !data.organizationId) {
+    if (!(data.organization || data.organizationId)) {
       ctx.addIssue({
         code: 'custom',
         message: 'Organization is required',
@@ -691,9 +731,10 @@ export const zCreateImport = z.object({
 
 export type ICreateImport = z.infer<typeof zCreateImport>;
 
-export * from './types.insights';
-export * from './types.validation';
-export * from './track.validation';
-export * from './event-blocklist';
 export * from './chat';
 export * from './cohort.validation';
+export * from './event-blocklist';
+export * from './profile-set-formula';
+export * from './track.validation';
+export * from './types.insights';
+export * from './types.validation';
