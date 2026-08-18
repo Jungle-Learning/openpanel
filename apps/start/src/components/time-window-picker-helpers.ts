@@ -17,11 +17,11 @@ export function getCustomTimeWindowDates(
   now = new Date()
 ): { start: Date; end: Date } | null {
   const amount = Number(rawAmount);
-  if (
-    !Number.isInteger(amount) ||
-    amount < 1 ||
-    amount > MAX_CUSTOM_TIME_WINDOW_BUCKETS
-  ) {
+  const hasValidBucketCount =
+    Number.isInteger(amount) &&
+    amount >= 1 &&
+    amount <= MAX_CUSTOM_TIME_WINDOW_BUCKETS;
+  if (!hasValidBucketCount) {
     return null;
   }
 

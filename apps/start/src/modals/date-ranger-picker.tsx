@@ -22,18 +22,23 @@ export default function DateRangerPicker({
   startDate: initialStartDate,
   endDate: initialEndDate,
 }: Props) {
-  const maximumSelectableDate = endOfDay(new Date());
-  const selectableInitialEndDate =
-    initialEndDate && isAfter(initialEndDate, maximumSelectableDate)
-      ? new Date()
-      : initialEndDate;
+  const now = new Date();
+  const maximumSelectableDate = endOfDay(now);
+  const isInitialEndDateAfterToday =
+    initialEndDate !== undefined &&
+    isAfter(initialEndDate, maximumSelectableDate);
+  // Relative ranges use tomorrow at midnight as an exclusive query boundary.
+  // The calendar presents that boundary as the final included day: today.
+  const selectableInitialEndDate = isInitialEndDateAfterToday
+    ? now
+    : initialEndDate;
   const [startDate, setStartDate] = useState(initialStartDate);
   const [endDate, setEndDate] = useState(selectableInitialEndDate);
   const [startCalendarMonth, setStartCalendarMonth] = useState(
-    initialStartDate ?? subMonths(new Date(), 1)
+    initialStartDate ?? subMonths(now, 1)
   );
   const [endCalendarMonth, setEndCalendarMonth] = useState(
-    selectableInitialEndDate ?? new Date()
+    selectableInitialEndDate ?? now
   );
   const hasValidRange =
     startDate !== undefined &&

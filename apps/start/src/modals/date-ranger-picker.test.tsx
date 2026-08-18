@@ -64,4 +64,20 @@ describe('DateRangerPicker', () => {
       })
     ).not.toBeNull();
   });
+
+  it('shows an exclusive tomorrow boundary as ending today', () => {
+    render(
+      <DateRangerPicker
+        endDate={new Date(2026, 7, 19)}
+        onChange={vi.fn()}
+        startDate={new Date(2026, 7, 1)}
+      />
+    );
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'Select 08/01/2026 - 08/18/2026',
+      })
+    ).not.toBeNull();
+  });
 });
