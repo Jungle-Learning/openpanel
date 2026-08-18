@@ -1,6 +1,8 @@
 import type { IInterval } from '@openpanel/validation';
 import { getISOWeek } from 'date-fns';
 
+const OPENPANEL_DATE_LOCALE = 'en-US';
+
 export function formatDateInterval(options: {
   interval: IInterval;
   date: Date | string;
@@ -11,13 +13,13 @@ export function formatDateInterval(options: {
   try {
     if (interval === 'hour' || interval === 'minute') {
       if (short) {
-        return new Intl.DateTimeFormat('en-GB', {
+        return new Intl.DateTimeFormat(OPENPANEL_DATE_LOCALE, {
           hour: '2-digit',
           minute: '2-digit',
           hour12: false,
         }).format(date);
       }
-      return new Intl.DateTimeFormat('en-GB', {
+      return new Intl.DateTimeFormat(OPENPANEL_DATE_LOCALE, {
         month: '2-digit',
         day: '2-digit',
         hour: '2-digit',
@@ -27,14 +29,16 @@ export function formatDateInterval(options: {
     }
 
     if (interval === 'month') {
-      return new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(date);
+      return new Intl.DateTimeFormat(OPENPANEL_DATE_LOCALE, {
+        month: 'short',
+      }).format(date);
     }
 
     if (interval === 'week') {
       if (short) {
         return `W${getISOWeek(date)}`;
       }
-      return new Intl.DateTimeFormat('en-GB', {
+      return new Intl.DateTimeFormat(OPENPANEL_DATE_LOCALE, {
         weekday: 'short',
         day: '2-digit',
         month: '2-digit',
@@ -43,12 +47,12 @@ export function formatDateInterval(options: {
 
     if (interval === 'day') {
       if (short) {
-        return new Intl.DateTimeFormat('en-GB', {
+        return new Intl.DateTimeFormat(OPENPANEL_DATE_LOCALE, {
           day: 'numeric',
           month: 'short',
         }).format(date);
       }
-      return new Intl.DateTimeFormat('en-GB', {
+      return new Intl.DateTimeFormat(OPENPANEL_DATE_LOCALE, {
         weekday: 'short',
         day: '2-digit',
         month: '2-digit',

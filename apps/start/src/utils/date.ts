@@ -23,7 +23,7 @@ export function formatDate(date: Date) {
     .replace('.', '')
     .toLowerCase();
 
-  return `${day} ${month}`;
+  return `${month} ${day}`;
 }
 
 export function formatDateTime(date: Date) {

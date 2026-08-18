@@ -53,7 +53,7 @@ const { Tooltip, TooltipProvider } = createChartTooltip<
     };
 
     const formatDate = (date: Date) => {
-      return new Intl.DateTimeFormat('en-GB', {
+      return new Intl.DateTimeFormat('en-US', {
         weekday: 'short',
         day: '2-digit',
         month: 'short',

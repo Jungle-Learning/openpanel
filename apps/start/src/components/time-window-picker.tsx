@@ -1,9 +1,14 @@
 import { getDefaultIntervalByDates, timeWindows } from '@openpanel/constants';
 import type { IChartRange, IInterval } from '@openpanel/validation';
 import { bind } from 'bind-event-listener';
-import { addDays, endOfDay, format, startOfDay, subDays } from 'date-fns';
+import { endOfDay, format, startOfDay } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type CustomTimeWindowUnit,
+  getCustomTimeWindowDates,
+  MAX_CUSTOM_TIME_WINDOW_BUCKETS,
+} from './time-window-picker-helpers';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -30,6 +35,17 @@ interface Props {
   startDate: string | null;
   className?: string;
 }
+
+const customTimeWindowOptions: Array<{
+  unit: CustomTimeWindowUnit;
+  label: string;
+  placeholder: string;
+}> = [
+  { unit: 'days', label: 'Last days', placeholder: 'X days' },
+  { unit: 'weeks', label: 'Last weeks', placeholder: 'X weeks' },
+  { unit: 'months', label: 'Last months', placeholder: 'X months' },
+];
+
 export function TimeWindowPicker({
   value,
   onChange,
@@ -46,17 +62,16 @@ export function TimeWindowPicker({
   });
   const timeWindow = timeWindows[value ?? '30d'];
   const [open, setOpen] = useState(false);
-  const [customDaysKey, setCustomDaysKey] = useState(0);
+  const [customTimeWindowKey, setCustomTimeWindowKey] = useState(0);
 
-  const handleCustomDays = useCallback(
-    (raw: string) => {
-      const days = Number(raw);
-      if (!Number.isInteger(days) || days < 1 || days > 365) {
+  const handleCustomTimeWindow = useCallback(
+    (rawAmount: string, unit: CustomTimeWindowUnit) => {
+      const range = getCustomTimeWindowDates(rawAmount, unit);
+      if (!range) {
         return;
       }
-      const now = new Date();
-      const start = startOfDay(subDays(now, days - 1));
-      const end = startOfDay(addDays(now, 1));
+
+      const { start, end } = range;
       onStartDateChange(format(start, 'yyyy-MM-dd HH:mm:ss'));
       onEndDateChange(format(end, 'yyyy-MM-dd HH:mm:ss'));
       onChange('custom');
@@ -67,7 +82,7 @@ export function TimeWindowPicker({
       if (interval) {
         onIntervalChange(interval);
       }
-      setCustomDaysKey((k) => k + 1);
+      setCustomTimeWindowKey((currentKey) => currentKey + 1);
       setOpen(false);
     },
     [onChange, onStartDateChange, onEndDateChange, onIntervalChange]
@@ -239,29 +254,34 @@ export function TimeWindowPicker({
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuGroup>
-          {/** biome-ignore lint/a11y/noNoninteractiveElementInteractions: none */}
-          {/** biome-ignore lint/a11y/noStaticElementInteractions: none */}
-          <div
-            className="flex items-center gap-4 rounded-sm px-2 py-1.5"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            <span className="whitespace-nowrap">Last days</span>
-            <InputEnter
-              aria-label="Number of days for custom date filter"
-              className="h-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              inputMode="numeric"
-              key={customDaysKey}
-              max={365}
-              min={1}
-              onChangeValue={handleCustomDays}
-              placeholder="X days"
-              step={1}
-              type="number"
-              value=""
-            />
-          </div>
+        {/** Keep typing in these fields from selecting their surrounding menu. */}
+        <DropdownMenuGroup
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {customTimeWindowOptions.map(({ unit, label, placeholder }) => (
+            <div
+              className="flex items-center gap-4 rounded-sm px-2 py-1.5"
+              key={unit}
+            >
+              <span className="w-20 whitespace-nowrap">{label}</span>
+              <InputEnter
+                aria-label={`Number of ${unit} for custom date filter`}
+                className="h-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                inputMode="numeric"
+                key={`${unit}-${customTimeWindowKey}`}
+                max={MAX_CUSTOM_TIME_WINDOW_BUCKETS}
+                min={1}
+                onChangeValue={(rawAmount) =>
+                  handleCustomTimeWindow(rawAmount, unit)
+                }
+                placeholder={placeholder}
+                step={1}
+                type="number"
+                value=""
+              />
+            </div>
+          ))}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
