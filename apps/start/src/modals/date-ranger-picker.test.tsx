@@ -11,6 +11,9 @@ vi.mock('./Modal/Container', () => ({
     <div>{children}</div>
   ),
 }));
+vi.mock('@/components/ui/dialog', () => ({
+  DialogTitle: ({ children }: { children: ReactNode }) => <h1>{children}</h1>,
+}));
 
 describe('DateRangerPicker', () => {
   beforeEach(() => {
@@ -26,6 +29,7 @@ describe('DateRangerPicker', () => {
   it('navigates the start and end calendars independently', () => {
     render(<DateRangerPicker onChange={vi.fn()} />);
 
+    expect(screen.queryByText('Select date range')).not.toBeNull();
     let yearDropdowns = screen.getAllByLabelText('Choose the Year');
     expect(yearDropdowns).toHaveLength(2);
     expect((yearDropdowns[0] as HTMLSelectElement).value).toBe('2026');

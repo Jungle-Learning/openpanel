@@ -7,6 +7,7 @@ import { popModal } from '.';
 import { ModalContent } from './Modal/Container';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { DialogTitle } from '@/components/ui/dialog';
 
 interface Props {
   onChange: (payload: {
@@ -47,6 +48,7 @@ export default function DateRangerPicker({
 
   return (
     <ModalContent className="min-w-fit p-4 md:p-8">
+      <DialogTitle className="sr-only">Select date range</DialogTitle>
       <div className="grid gap-6 md:grid-cols-2">
         <div className="col gap-2">
           <div className="text-center font-medium text-sm">Start date</div>
