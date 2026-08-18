@@ -28,6 +28,7 @@ import { DeltaChip } from '@/components/delta-chip';
 import { PreviousDiffIndicator } from '../common/previous-diff-indicator';
 import { SerieIcon } from '../common/serie-icon';
 import { SerieName } from '../common/serie-name';
+import { hasBreakdownValue } from '../common/serie-name-utils';
 import { useReportChartContext } from '../context';
 
 type SortOption =
@@ -48,15 +49,29 @@ export function Chart({ data }: Props) {
   const [sortBy, setSortBy] = useState<SortOption>('count-desc');
   const {
     isEditMode,
-    report: { metric, limit, previous },
+    report: { breakdowns, metric, limit, previous },
     options: { onClick, dropdownMenuContent },
   } = useReportChartContext();
   const number = useNumber();
 
-  // Use useVisibleSeries to add index property for colors
-  const { series: allSeriesWithIndex } = useVisibleSeries(data, { limit: 500 });
+  const dataWithBreakdownValues = useMemo(
+    () => ({
+      ...data,
+      series: data.series.filter((serie) =>
+        hasBreakdownValue(serie.names, breakdowns.length),
+      ),
+    }),
+    [data, breakdowns.length],
+  );
 
-  const totalSum = data.metrics.sum || 1;
+  // Use useVisibleSeries to add index property for colors
+  const { series: allSeriesWithIndex } = useVisibleSeries(
+    dataWithBreakdownValues,
+    { limit: 500 },
+  );
+
+  const totalSum =
+    allSeriesWithIndex.reduce((sum, serie) => sum + serie.metrics.sum, 0) || 1;
 
   // Calculate original ranks (based on count descending - default sort)
   const seriesWithOriginalRank = useMemo(() => {

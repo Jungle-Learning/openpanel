@@ -59,4 +59,34 @@ describe('formatDateInterval', () => {
       })
     ).toBe('Jul 4');
   });
+
+  it('formats weekly axis labels using the bucket start date', () => {
+    expect(
+      formatDateInterval({
+        interval: 'week',
+        date: '2026-06-08',
+        short: true,
+      })
+    ).toBe('Jun 8');
+  });
+
+  it('formats weekly tooltips as the full week range', () => {
+    expect(
+      formatDateInterval({
+        interval: 'week',
+        date: '2026-06-08',
+        short: false,
+      })
+    ).toBe('June 8 - June 15, 2026');
+  });
+
+  it('includes both years when a weekly range crosses New Year', () => {
+    expect(
+      formatDateInterval({
+        interval: 'week',
+        date: '2026-12-28',
+        short: false,
+      })
+    ).toBe('December 28, 2026 - January 4, 2027');
+  });
 });

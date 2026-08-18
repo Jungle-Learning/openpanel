@@ -210,6 +210,28 @@ function buildCohortMembers(projectId: string) {
   }));
 }
 
+function buildProfiles(projectId: string) {
+  return Object.values(RETENTION_FIXTURE.users).map((profileId) => ({
+    id: profileId,
+    project_id: projectId,
+    first_name: profileId,
+    last_name: '',
+    email: `${profileId}@example.com`,
+    avatar: '',
+    is_external: false,
+    properties: {
+      studentType:
+        profileId === RETENTION_FIXTURE.users.ru1 ||
+        profileId === RETENTION_FIXTURE.users.ru4
+          ? 'Undergraduate'
+          : 'High School',
+    },
+    groups: [],
+    created_at: '2024-01-01 00:00:00',
+    last_seen_at: '2025-01-07 00:00:00',
+  }));
+}
+
 async function deleteFixtures(client: ChClient, projectId: string) {
   // The events table has projections, so ClickHouse rejects lightweight
   // DELETE. Synchronous ALTER mutations keep both reruns and dependent view
@@ -225,12 +247,20 @@ async function deleteFixtures(client: ChClient, projectId: string) {
   await client.command({
     query: `ALTER TABLE openpanel.cohort_members DELETE WHERE project_id = '${projectId}' SETTINGS mutations_sync = 2`,
   });
+  await client.command({
+    query: `ALTER TABLE openpanel.profiles DELETE WHERE project_id = '${projectId}' SETTINGS mutations_sync = 2`,
+  });
 }
 
 export async function setupRetentionFixtures(projectId: string): Promise<void> {
   const client = getClient();
   try {
     await deleteFixtures(client, projectId);
+    await client.insert({
+      table: 'openpanel.profiles',
+      values: buildProfiles(projectId),
+      format: 'JSONEachRow',
+    });
     await client.insert({
       table: 'openpanel.events',
       values: buildEvents(projectId),

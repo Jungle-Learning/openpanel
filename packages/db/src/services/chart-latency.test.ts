@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { getChartProjectionCommands } from '../../code-migrations/18-add-chart-projection';
+import { getExactSourceProjectionCommands } from '../../code-migrations/19-add-exact-source-chart-projection';
 import { getChartSql as getChartSqlImpl } from './chart.service';
 
 const getChartSql: (input: any) => Promise<string> = getChartSqlImpl as any;
@@ -71,6 +72,19 @@ describe('chart latency SQL', () => {
     expect(sql).toContain('e._property_platform as label_1');
     expect(sql).not.toContain("properties['platform']");
   });
+
+  it('uses the dedicated projection column for attribution breakdowns', async () => {
+    const sql = await getChartSql(
+      chartInput({
+        breakdowns: [
+          { id: 'exact-source', name: 'properties.exactSourceName' },
+        ],
+      }),
+    );
+
+    expect(sql).toContain('e._property_exact_source_name as label_1');
+    expect(sql).not.toContain("properties['exactSourceName']");
+  });
 });
 
 describe('chart projection migration', () => {
@@ -94,5 +108,31 @@ describe('chart projection migration', () => {
     expect(sql).toContain('ALTER TABLE events ADD COLUMN');
     expect(sql).toContain('ALTER TABLE events ADD PROJECTION');
     expect(sql).not.toContain('events_replicated');
+  });
+
+  it('adds a dedicated exact-source projection in self-hosted mode', () => {
+    const sql = getExactSourceProjectionCommands(false).join('\n');
+
+    expect(sql).toContain(
+      "MATERIALIZED properties['exactSourceName']",
+    );
+    expect(sql).toContain(
+      'ALTER TABLE events ADD PROJECTION IF NOT EXISTS chart_events_by_exact_source',
+    );
+    expect(sql).toContain('_property_exact_source_name');
+  });
+
+  it('updates the distributed schema and replicated projection in clustered mode', () => {
+    const sql = getExactSourceProjectionCommands(true).join('\n');
+
+    expect(sql).toContain(
+      "ALTER TABLE events_replicated ON CLUSTER '{cluster}' ADD COLUMN",
+    );
+    expect(sql).toContain(
+      "ALTER TABLE events ON CLUSTER '{cluster}' ADD COLUMN",
+    );
+    expect(sql).toContain(
+      "ALTER TABLE events_replicated ON CLUSTER '{cluster}' ADD PROJECTION",
+    );
   });
 });

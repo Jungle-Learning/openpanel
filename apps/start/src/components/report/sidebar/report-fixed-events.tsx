@@ -6,6 +6,7 @@ import { useAppParams } from '@/hooks/use-app-params';
 import { useDebounceFn } from '@/hooks/use-debounce-fn';
 import { useEventNames } from '@/hooks/use-event-names';
 import { useDispatch, useSelector } from '@/redux';
+import { getRetentionSelectedEventNames } from '@openpanel/common';
 import { alphabetIds } from '@openpanel/constants';
 import type {
   IChartEvent,
@@ -153,11 +154,11 @@ export function ReportFixedEvents({
                 multiple={isSelectManyEvents as false}
                 value={
                   (isSelectManyEvents
-                    ? ((
+                    ? getRetentionSelectedEventNames(
                         event as IChartEventItem & {
                           type: 'event';
-                        }
-                      ).filters[0]?.value ?? [])
+                        },
+                      )
                     : (
                         event as IChartEventItem & {
                           type: 'event';
@@ -178,6 +179,9 @@ export function ReportFixedEvents({
                                 operator: 'is',
                                 value: value,
                               },
+                              ...event.filters.filter(
+                                (filter) => filter.name !== 'name',
+                              ),
                             ],
                             name: '*',
                           }

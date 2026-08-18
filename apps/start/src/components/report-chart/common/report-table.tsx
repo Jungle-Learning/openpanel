@@ -830,7 +830,7 @@ export function ReportTable({
 
           return (
             <div
-              className="flex items-center gap-2 cursor-pointer hover:opacity-70"
+              className="flex min-w-0 items-center gap-2 overflow-hidden cursor-pointer hover:opacity-70"
               onClick={() => {
                 if (!grouped) return;
                 // Toggle all groups at this breakdown level
@@ -862,7 +862,9 @@ export function ReportTable({
               role="button"
               tabIndex={0}
             >
-              <span>{propertyName}</span>
+              <span className="min-w-0 truncate" title={propertyName}>
+                {propertyName}
+              </span>
             </div>
           );
         },
@@ -1387,7 +1389,7 @@ export function ReportTable({
                   role={canSort ? 'button' : undefined}
                   tabIndex={canSort ? 0 : undefined}
                 >
-                  <div className="flex items-center gap-1.5 flex-1">
+                  <div className="flex min-w-0 items-center gap-1.5 flex-1">
                     {header.isPlaceholder
                       ? null
                       : typeof headerContent === 'function'

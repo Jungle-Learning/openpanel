@@ -83,6 +83,7 @@ const EVENT_UTM_BARE_COLUMNS = new Set<string>([
 const MATERIALIZED_EVENT_PROPERTY_COLUMNS: Record<string, string> = {
   'properties.aiGeneratedFollowUpQuestionSelectedText':
     '_property_ai_generated_follow_up_question_selected_text',
+  'properties.exactSourceName': '_property_exact_source_name',
   'properties.fixedFollowUpQuestionSelectedText':
     '_property_fixed_follow_up_question_selected_text',
   'properties.platform': '_property_platform',

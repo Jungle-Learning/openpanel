@@ -1,5 +1,5 @@
 import type { IInterval } from '@openpanel/validation';
-import { getISOWeek } from 'date-fns';
+import { addWeeks } from 'date-fns';
 
 const OPENPANEL_DATE_LOCALE = 'en-US';
 
@@ -36,13 +36,25 @@ export function formatDateInterval(options: {
 
     if (interval === 'week') {
       if (short) {
-        return `W${getISOWeek(date)}`;
+        return new Intl.DateTimeFormat(OPENPANEL_DATE_LOCALE, {
+          month: 'short',
+          day: 'numeric',
+        }).format(date);
       }
-      return new Intl.DateTimeFormat(OPENPANEL_DATE_LOCALE, {
-        weekday: 'short',
-        day: '2-digit',
-        month: '2-digit',
-      }).format(date);
+
+      const weekEndDate = addWeeks(date, 1);
+      const formatWeekDate = (weekDate: Date, includeYear: boolean) =>
+        new Intl.DateTimeFormat(OPENPANEL_DATE_LOCALE, {
+          month: 'long',
+          day: 'numeric',
+          year: includeYear ? 'numeric' : undefined,
+        }).format(weekDate);
+
+      if (date.getFullYear() !== weekEndDate.getFullYear()) {
+        return `${formatWeekDate(date, true)} - ${formatWeekDate(weekEndDate, true)}`;
+      }
+
+      return `${formatWeekDate(date, false)} - ${formatWeekDate(weekEndDate, true)}`;
     }
 
     if (interval === 'day') {

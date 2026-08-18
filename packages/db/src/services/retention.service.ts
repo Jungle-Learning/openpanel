@@ -3,7 +3,8 @@ import type { IChartEventFilter } from '@openpanel/validation';
 import { range } from 'ramda';
 import sqlstring from 'sqlstring';
 
-import { TABLE_NAMES, chQuery } from '../clickhouse/client';
+import { TABLE_NAMES, ch, chQuery } from '../clickhouse/client';
+import { clix } from '../clickhouse/query-builder';
 import { getEventFiltersWhereClause } from './chart.service';
 
 type IGetWeekRetentionInput = {
@@ -214,8 +215,8 @@ export type IGetRetentionCohortInput = {
   endDate: string;
   /**
    * Property and/or cohort filters scoping the analysed events. Cohort
-   * membership (inCohort/notInCohort) keeps the fast cohort_events_mv path;
-   * any property/column filter falls back to the raw events table.
+   * membership and profile filters keep the fast cohort_events_mv path;
+   * event/group/session properties fall back to the raw events table.
    */
   filters?: IChartEventFilter[];
 };
@@ -298,6 +299,17 @@ function eventNameWhere(events: string[] | undefined): string | null {
   return `name IN (${events.map((event) => sqlstring.escape(event)).join(', ')})`;
 }
 
+export function retentionFiltersRequireRawEvents(
+  filters: IChartEventFilter[],
+): boolean {
+  return filters.some(
+    (filter) =>
+      filter.operator !== 'inCohort' &&
+      filter.operator !== 'notInCohort' &&
+      !filter.name.startsWith('profile.'),
+  );
+}
+
 export async function getRetentionCohort(input: IGetRetentionCohortInput) {
   const {
     projectId,
@@ -324,23 +336,34 @@ export async function getRetentionCohort(input: IGetRetentionCohortInput) {
   const secondWhere = eventNameWhere(secondEvent);
 
   // Hybrid source: cohort_events_mv (skinny, fast) carries only
-  // project_id/name/created_at/profile_id, so any filter referencing event
-  // properties or columns forces a fallback to the raw events table. Cohort
-  // membership filters only need profile_id, so they stay on the fast path.
-  const needRawEvents = filters.some(
-    (filter) =>
-      filter.operator !== 'inCohort' && filter.operator !== 'notInCohort'
-  );
+  // project_id/name/created_at/profile_id. Profile filters can use those rows
+  // plus the profile join; only event/group/session fields require raw events.
+  const needRawEvents = retentionFiltersRequireRawEvents(filters);
   const source = needRawEvents ? TABLE_NAMES.events : TABLE_NAMES.cohort_events_mv;
+  const hasProfileFilters = filters.some((filter) =>
+    filter.name.startsWith('profile.'),
+  );
+  const profilesForProjectQuery = hasProfileFilters
+    ? clix(ch)
+        .select(['id', 'properties'])
+        .from(TABLE_NAMES.profiles, true)
+        .where('project_id', '=', projectId)
+        .toSQL()
+    : '';
+  const profileJoin = hasProfileFilters
+    ? `LEFT ANY JOIN (
+        ${profilesForProjectQuery}
+      ) AS profile ON profile.id = e.profile_id`
+    : '';
 
-  const baseConditions = [`project_id = ${escProject}`];
+  const baseConditions = [`e.project_id = ${escProject}`];
   if (needRawEvents) {
     // cohort_events_mv only stores identified-user rows; replicate that here.
-    baseConditions.push('profile_id != device_id');
+    baseConditions.push('e.profile_id != e.device_id');
   }
   if (filters.length > 0) {
     baseConditions.push(
-      ...Object.values(getEventFiltersWhereClause(filters, projectId))
+      ...Object.values(getEventFiltersWhereClause(filters, projectId, 'e')),
     );
   }
   const baseWhere = baseConditions.join('\n        AND ');
@@ -365,7 +388,8 @@ export async function getRetentionCohort(input: IGetRetentionCohortInput) {
       SELECT
         profile_id AS userID,
         ${sqlToStartOf}(min(created_at)) AS cohort_interval
-      FROM ${source}
+      FROM ${source} AS e
+      ${profileJoin}
       WHERE ${baseWhere}
         ${firstWhere ? `AND ${firstWhere}` : ''}
         AND created_at >= toDateTime(${escapedStart})
@@ -376,7 +400,8 @@ export async function getRetentionCohort(input: IGetRetentionCohortInput) {
       SELECT
         profile_id,
         toDate(created_at) AS event_date
-      FROM ${source}
+      FROM ${source} AS e
+      ${profileJoin}
       WHERE ${baseWhere}
         ${secondWhere ? `AND ${secondWhere}` : ''}
         AND created_at >= toDateTime(${escapedStart})
