@@ -27,6 +27,7 @@ import {
   ChartClickMenu,
   type ChartClickMenuItem,
 } from '../common/chart-click-menu';
+import { ChartTotal } from '../common/chart-total';
 import { ReportChartTooltip } from '../common/report-chart-tooltip';
 import { ReportTable } from '../common/report-table';
 import { useReportChartContext } from '../context';
@@ -161,9 +162,16 @@ export function Chart({ data }: Props) {
   return (
     <ReportChartTooltip.TooltipProvider references={references.data}>
       <ChartClickMenu getMenuItems={getMenuItems}>
-        <div className={cn('h-full w-full', isEditMode && 'card p-4')}>
-          <ResponsiveContainer>
-            <BarChart data={rechartData}>
+        <div
+          className={cn(
+            'flex h-full w-full flex-col',
+            isEditMode && 'card p-4',
+          )}
+        >
+          <ChartTotal data={data} />
+          <div className="min-h-0 flex-1">
+            <ResponsiveContainer>
+              <BarChart data={rechartData}>
               <CartesianGrid
                 strokeDasharray="3 3"
                 vertical={false}
@@ -218,8 +226,9 @@ export function Chart({ data }: Props) {
                   fontSize={10}
                 />
               ))}
-            </BarChart>
-          </ResponsiveContainer>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
         {isEditMode && (
           <ReportTable

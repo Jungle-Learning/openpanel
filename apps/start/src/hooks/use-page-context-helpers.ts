@@ -1,4 +1,5 @@
 import { useOverviewOptions } from '@/components/overview/useOverviewOptions';
+import { useDashboardOptions } from '@/components/dashboard/use-dashboard-options';
 import {
   type PageContext,
   type PageContextPage,
@@ -74,14 +75,14 @@ export function useDashboardPageContext(
   primer?: Record<string, unknown>,
 ) {
   const { projectId, organizationId } = useAppParams();
-  const { range, startDate, endDate, interval } = useOverviewOptions();
+  const { range, startDate, endDate, interval } = useDashboardOptions();
 
   usePageContext({
     page: 'dashboard',
     route: { projectId, organizationId },
     ids: { dashboardId },
     filters: {
-      range,
+      range: range ?? undefined,
       startDate: startDate ?? undefined,
       endDate: endDate ?? undefined,
       interval: interval ?? undefined,
