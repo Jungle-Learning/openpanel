@@ -53,7 +53,7 @@ const initialState: InitialState = {
   formula: undefined,
   unit: undefined,
   metric: 'sum',
-  limit: 500,
+  limit: 100,
   options: undefined,
   visibleSeries: undefined,
 };

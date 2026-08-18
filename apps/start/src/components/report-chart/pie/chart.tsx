@@ -5,8 +5,7 @@ import type { IChartData } from '@/trpc/client';
 import { cn } from '@/utils/cn';
 import { round } from '@/utils/math';
 import { getChartColor } from '@/utils/theme';
-import { truncate } from '@/utils/truncate';
-import { Fragment } from 'react';
+import { Fragment, useMemo } from 'react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import {
@@ -19,10 +18,13 @@ import { parseChartDate } from '@/hooks/use-format-date-interval';
 import { formatDate } from '@/utils/date';
 import { AXIS_FONT_PROPS } from '../common/axis';
 import { PreviousDiffIndicator } from '../common/previous-diff-indicator';
-import { ReportChartTooltip } from '../common/report-chart-tooltip';
 import { ReportTable } from '../common/report-table';
 import { SerieIcon } from '../common/serie-icon';
 import { SerieName } from '../common/serie-name';
+import {
+  getSerieDisplayNames,
+  hasBreakdownValue,
+} from '../common/serie-name-utils';
 import { useReportChartContext } from '../context';
 
 interface Props {
@@ -69,22 +71,32 @@ const PieTooltip = (props: { payload?: any[] }) => {
 export function Chart({ data }: Props) {
   const {
     isEditMode,
-    report: { visibleSeries: savedVisibleSeries },
+    report: { breakdowns, visibleSeries: savedVisibleSeries },
   } = useReportChartContext();
   const dispatch = useDispatch();
-  const { series, setVisibleSeries } = useVisibleSeries(data, {
+  const dataWithBreakdownValues = useMemo(
+    () => ({
+      ...data,
+      series: data.series.filter((serie) =>
+        hasBreakdownValue(serie.names, breakdowns.length),
+      ),
+    }),
+    [data, breakdowns.length],
+  );
+  const { series, setVisibleSeries } = useVisibleSeries(dataWithBreakdownValues, {
     savedVisibleSeries,
     onVisibleSeriesChange: isEditMode
       ? (ids) => dispatch(changeVisibleSeries(ids))
       : undefined,
   });
 
-  const sum = series.reduce((acc, serie) => acc + serie.metrics.sum, 0);
+  const sum =
+    series.reduce((acc, serie) => acc + serie.metrics.sum, 0) || 1;
   const pieData = series.map((serie) => ({
     id: serie.id,
     color: getChartColor(serie.index),
     index: serie.index,
-    name: serie.names.join(' > '),
+    name: getSerieDisplayNames(serie.names, breakdowns.length).join(' > '),
     names: serie.names,
     count: serie.metrics.sum,
     percent: serie.metrics.sum / sum,
@@ -94,36 +106,56 @@ export function Chart({ data }: Props) {
   return (
     <>
       <div
-        className={cn('h-full w-full max-sm:-mx-3', isEditMode && 'card p-4')}
+        className={cn(
+          'flex h-full w-full flex-col max-sm:-mx-3',
+          isEditMode && 'card p-4',
+        )}
       >
-        <ResponsiveContainer>
-          <PieChart>
-            <Tooltip content={<PieTooltip />} />
-            <Pie
-              dataKey={'count'}
-              data={pieData}
-              innerRadius={'30%'}
-              outerRadius={'80%'}
-              isAnimationActive={false}
-              label={renderLabel}
-            >
-              {pieData.map((item) => {
-                return (
-                  <Cell
-                    key={item.id}
-                    strokeWidth={4}
-                    className="stroke-background"
-                    fill={item.color}
-                  />
-                );
-              })}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
+        <div className="min-h-0 flex-1">
+          <ResponsiveContainer>
+            <PieChart>
+              <Tooltip content={<PieTooltip />} />
+              <Pie
+                dataKey={'count'}
+                data={pieData}
+                innerRadius={'30%'}
+                outerRadius={'82%'}
+                isAnimationActive={false}
+                label={renderLabel}
+                labelLine={false}
+              >
+                {pieData.map((item) => {
+                  return (
+                    <Cell
+                      key={item.id}
+                      strokeWidth={4}
+                      className="stroke-background"
+                      fill={item.color}
+                    />
+                  );
+                })}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 px-2 text-xs">
+          {series.map((serie) => (
+            <div className="flex min-w-0 items-center gap-1.5" key={serie.id}>
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: getChartColor(serie.index) }}
+              />
+              <SerieName
+                className="max-w-40 truncate font-medium"
+                name={serie.names}
+              />
+            </div>
+          ))}
+        </div>
       </div>
       {isEditMode && (
         <ReportTable
-          data={data}
+          data={dataWithBreakdownValues}
           visibleSeries={series}
           setVisibleSeries={setVisibleSeries}
         />
@@ -138,7 +170,6 @@ const renderLabel = ({
   midAngle,
   innerRadius,
   outerRadius,
-  fill,
   payload,
 }: {
   cx: number;
@@ -146,46 +177,34 @@ const renderLabel = ({
   midAngle: number;
   innerRadius: number;
   outerRadius: number;
-  fill: string;
   payload: { name: string; percent: number };
 }) => {
   const RADIAN = Math.PI / 180;
-  const radius = 25 + innerRadius + (outerRadius - innerRadius);
   const radiusProcent = innerRadius + (outerRadius - innerRadius) * 0.5;
   const xProcent = cx + radiusProcent * Math.cos(-midAngle * RADIAN);
   const yProcent = cy + radiusProcent * Math.sin(-midAngle * RADIAN);
-  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-  const y = cy + radius * Math.sin(-midAngle * RADIAN);
-  const name = payload.name;
   const percent = round(payload.percent * 100, 1);
 
+  if (percent < 4) {
+    return null;
+  }
+
   return (
-    <>
-      <text
-        x={xProcent}
-        y={yProcent}
-        fill="white"
-        textAnchor="middle"
-        dominantBaseline="central"
-        pointerEvents={'none'}
-        {...AXIS_FONT_PROPS}
-        fontSize={12}
-        fontWeight={700}
-      >
-        {percent}%
-      </text>
-      <text
-        x={x}
-        y={y}
-        fill={fill}
-        textAnchor={x > cx ? 'start' : 'end'}
-        dominantBaseline="central"
-        {...AXIS_FONT_PROPS}
-        fontSize={10}
-        fontWeight={700}
-      >
-        {truncate(name, 20)}
-      </text>
-    </>
+    <text
+      x={xProcent}
+      y={yProcent}
+      fill="white"
+      stroke="rgb(0 0 0 / 65%)"
+      strokeWidth={3}
+      paintOrder="stroke"
+      textAnchor="middle"
+      dominantBaseline="central"
+      pointerEvents={'none'}
+      {...AXIS_FONT_PROPS}
+      fontSize={12}
+      fontWeight={700}
+    >
+      {percent}%
+    </text>
   );
 };

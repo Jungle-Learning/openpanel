@@ -21,6 +21,17 @@ import {
 } from './profile-set';
 import type { ConcreteSeries } from './types';
 
+export function getAggregateQuerySeriesLimit(
+  definitions: Array<{ type: 'event' | 'formula' }>,
+  previous: boolean,
+  responseLimit: number,
+): number | undefined {
+  const hasFormula = definitions.some(
+    (definition) => definition.type === 'formula',
+  );
+  return previous || hasFormula ? undefined : responseLimit;
+}
+
 /**
  * Chart Engine - Main entry point
  * Executes the pipeline: normalize -> plan -> fetch -> compute -> format
@@ -98,6 +109,19 @@ export async function executeAggregateChart(
   }
 
   const { timezone } = await getSettingsForProject(normalized.projectId);
+  // Aggregate breakdowns are sorted by count, so returning the top 100 keeps
+  // bar and pie reports responsive without transferring thousands of rows.
+  // Explicit report limits remain supported for callers that need more.
+  const aggregateSeriesLimit = normalized.limit ?? 100;
+  // Formulas need every dependency for a breakdown before they are computed,
+  // and previous-period comparisons need the matching breakdown even when it
+  // was not in that period's top results. Limit those reports only after
+  // alignment in `format`; simple aggregate reports can safely limit in SQL.
+  const aggregateQuerySeriesLimit = getAggregateQuerySeriesLimit(
+    normalized.series,
+    normalized.previous,
+    aggregateSeriesLimit,
+  );
 
   // Stage 2: Fetch aggregate data for current period (event series only)
   const fetchedSeries: ConcreteSeries[] = [];
@@ -128,7 +152,7 @@ export async function executeAggregateChart(
       startDate: normalized.startDate,
       endDate: normalized.endDate,
       breakdowns: normalized.breakdowns,
-      limit: normalized.limit,
+      limit: aggregateQuerySeriesLimit,
       metric: normalized.metric,
       previous: normalized.previous,
       timezone,
@@ -256,7 +280,7 @@ export async function executeAggregateChart(
         startDate: previousPeriod.startDate,
         endDate: previousPeriod.endDate,
         breakdowns: normalized.breakdowns,
-        limit: normalized.limit,
+        limit: aggregateQuerySeriesLimit,
         metric: normalized.metric,
         previous: normalized.previous,
         timezone,
@@ -348,7 +372,7 @@ export async function executeAggregateChart(
     normalized.series,
     includeAlphaIds,
     previousSeries,
-    normalized.limit,
+    aggregateSeriesLimit,
   );
 
   return response;

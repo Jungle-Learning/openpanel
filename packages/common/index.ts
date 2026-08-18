@@ -10,4 +10,5 @@ export * from './src/id';
 export * from './src/get-previous-metric';
 export * from './src/group-by-labels';
 export * from './src/try-catch';
+export * from './src/retention';
 export * from './server/get-client-ip';

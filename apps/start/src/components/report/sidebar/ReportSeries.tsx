@@ -14,6 +14,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { getRetentionSelectedEventNames } from '@openpanel/common';
 import { alphabetIds } from '@openpanel/constants';
 import type {
   IChartEvent,
@@ -369,6 +370,9 @@ export function ReportSeries() {
                                         operator: 'is',
                                         value,
                                       },
+                                      ...event.filters.filter(
+                                        (filter) => filter.name !== 'name',
+                                      ),
                                     ],
                                     name: '*',
                                   }
@@ -389,11 +393,11 @@ export function ReportSeries() {
                         searchable
                         value={
                           (isSelectManyEvents
-                            ? ((
+                            ? getRetentionSelectedEventNames(
                                 event as IChartEventItem & {
                                   type: 'event';
-                                }
-                              ).filters[0]?.value ?? [])
+                                },
+                              )
                             : (
                                 event as IChartEventItem & {
                                   type: 'event';

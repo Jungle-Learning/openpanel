@@ -1,0 +1,104 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { TABLE_NAMES } from '../src/clickhouse/client';
+import {
+  addColumns,
+  chMigrationClient,
+  runClickhouseMigrationCommands,
+} from '../src/clickhouse/migration';
+import { getIsCluster } from './helpers';
+
+const PROJECTION_NAME = 'chart_events_by_exact_source';
+
+export function getExactSourceProjectionCommands(
+  isClustered: boolean,
+): string[] {
+  const projectionTable = isClustered
+    ? `${TABLE_NAMES.events}_replicated`
+    : TABLE_NAMES.events;
+  const onCluster = isClustered ? " ON CLUSTER '{cluster}'" : '';
+
+  return [
+    ...addColumns(
+      TABLE_NAMES.events,
+      [
+        "`_property_exact_source_name` LowCardinality(String) MATERIALIZED properties['exactSourceName']",
+      ],
+      isClustered,
+    ),
+    `ALTER TABLE ${projectionTable}${onCluster} ADD PROJECTION IF NOT EXISTS ${PROJECTION_NAME} (
+      SELECT
+        project_id,
+        name,
+        created_at,
+        country,
+        profile_id,
+        session_id,
+        device_id,
+        os,
+        _property_exact_source_name
+      ORDER BY (project_id, name, created_at)
+    )`,
+  ];
+}
+
+export async function up() {
+  const isClustered = getIsCluster();
+  const sqls = getExactSourceProjectionCommands(isClustered);
+
+  fs.writeFileSync(
+    path.join(import.meta.filename.replace('.ts', '.sql')),
+    sqls
+      .map((sql) =>
+        sql
+          .trim()
+          .replace(/;$/, '')
+          .replace(/\n{2,}/g, '\n')
+          .concat(';'),
+      )
+      .join('\n\n---\n\n'),
+  );
+
+  if (process.argv.includes('--dry')) {
+    return;
+  }
+
+  await runClickhouseMigrationCommands(sqls);
+
+  if (isClustered) {
+    // New parts populate the projection automatically. Historical cluster
+    // backfills must be scheduled per shard to avoid a large fan-out mutation.
+    return;
+  }
+
+  const partitionsResponse = await chMigrationClient.query({
+    query: `SELECT DISTINCT partition
+      FROM system.parts
+      WHERE active
+        AND database = currentDatabase()
+        AND table = '${TABLE_NAMES.events}'
+        AND partition >= toString(toYYYYMM(now() - INTERVAL 12 MONTH))
+        AND partition <= toString(toYYYYMM(now()))
+        AND partition NOT IN (
+          SELECT DISTINCT partition
+          FROM system.projection_parts
+          WHERE active
+            AND database = currentDatabase()
+            AND table = '${TABLE_NAMES.events}'
+            AND name = '${PROJECTION_NAME}'
+        )
+      ORDER BY partition`,
+    format: 'JSONEachRow',
+  });
+  const partitions = await partitionsResponse.json<{ partition: string }>();
+  const validPartitions = partitions.filter(({ partition }) =>
+    /^\d{6}$/.test(partition),
+  );
+
+  await runClickhouseMigrationCommands(
+    validPartitions.map(
+      ({ partition }) =>
+        `ALTER TABLE ${TABLE_NAMES.events} MATERIALIZE PROJECTION ${PROJECTION_NAME} IN PARTITION ${partition}`,
+    ),
+  );
+}

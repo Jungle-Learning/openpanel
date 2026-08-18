@@ -1,5 +1,6 @@
-import { useTRPC } from '@/integrations/trpc/react';
+import { getRetentionEventNames } from '@openpanel/common';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useTRPC } from '@/integrations/trpc/react';
 
 import { AspectContainer } from '../aspect-container';
 import { ReportChartEmpty } from '../common/empty';
@@ -12,21 +13,20 @@ import CohortTable from './table';
 export function ReportRetentionChart() {
   const { isLazyLoading, report, shareId } = useReportChartContext();
   const eventSeries = report.series.filter((item) => item.type === 'event');
-  const firstEvent = (eventSeries[0]?.filters?.[0]?.value ?? []).map(String);
-  const secondEvent = (eventSeries[1]?.filters?.[0]?.value ?? []).map(String);
-  // filters[0] on each retention series is the event-name selector; everything
-  // else is an audience filter (property or cohort) applied to the cohort.
-  // Report-level global filters apply to the whole retention audience too.
+  const firstEvent = getRetentionEventNames(eventSeries[0]);
+  const secondEvent = getRetentionEventNames(eventSeries[1]);
+  // A `name` filter is an event selector in newer reports. All other filters
+  // scope the retention audience, including filters on older saved reports.
   const filters = [
     ...(report.globalFilters ?? []),
     ...eventSeries.flatMap((item) =>
       (item.filters ?? []).filter((filter) => filter.name !== 'name'),
     ),
   ];
-  const isEnabled =
-    firstEvent.length > 0 && secondEvent.length > 0 && !isLazyLoading;
+  const isEnabled = eventSeries.length >= 2 && !isLazyLoading;
 
-  const retentionOptions = report.options?.type === 'retention' ? report.options : undefined;
+  const retentionOptions =
+    report.options?.type === 'retention' ? report.options : undefined;
   const criteria = retentionOptions?.criteria ?? 'on_or_after';
 
   const trpc = useTRPC();

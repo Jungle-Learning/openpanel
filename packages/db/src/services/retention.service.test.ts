@@ -14,6 +14,7 @@ import {
   type IRetentionCohortRow,
   normalizeRetentionDateTime,
   processCohortData,
+  retentionFiltersRequireRawEvents,
 } from './retention.service';
 
 const PROJECT_ID = 'test-retention-cohort';
@@ -30,6 +31,34 @@ describe('normalizeRetentionDateTime', () => {
     expect(() =>
       normalizeRetentionDateTime("2026-08-18' OR 1 = 1")
     ).toThrow('Invalid retention date');
+  });
+});
+
+describe('retentionFiltersRequireRawEvents', () => {
+  it('keeps profile and cohort filters on the compact retention table', () => {
+    expect(
+      retentionFiltersRequireRawEvents([
+        {
+          name: 'profile.properties.studentType',
+          operator: 'is',
+          value: ['Undergraduate'],
+        },
+        {
+          name: 'cohort',
+          operator: 'inCohort',
+          value: [],
+          cohortIds: ['undergraduates'],
+        },
+      ]),
+    ).toBe(false);
+  });
+
+  it('uses raw events for event properties and columns', () => {
+    expect(
+      retentionFiltersRequireRawEvents([
+        { name: 'country', operator: 'is', value: ['US'] },
+      ]),
+    ).toBe(true);
   });
 });
 
@@ -193,6 +222,30 @@ describe('getRetentionCohort', () => {
     });
 
     expect(cohortsOnly(rows)).toEqual(RETENTION_BLUEPRINT.countryUsOn);
+  });
+
+  it('joins profiles when applying a profile-property filter', async () => {
+    const rows = await getRetentionCohort({
+      projectId: PROJECT_ID,
+      firstEvent: ['app_open'],
+      secondEvent: ['app_open'],
+      criteria: 'on',
+      interval: 'day',
+      startDate: day.start,
+      endDate: day.end,
+      filters: [
+        {
+          name: 'profile.properties.studentType',
+          operator: 'is',
+          value: ['Undergraduate'],
+        },
+      ],
+    });
+
+    expect(cohortsOnly(rows)).toEqual([
+      { cohort_interval: day.d0, sum: 1, values: [1, 1, 1] },
+      { cohort_interval: day.d1, sum: 1, values: [1, 1, 0] },
+    ]);
   });
 
   it('scopes to a saved cohort via the fast MV path (inCohort)', async () => {

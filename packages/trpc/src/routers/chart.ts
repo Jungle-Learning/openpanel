@@ -1,3 +1,4 @@
+import { getRetentionEventNames } from '@openpanel/common';
 import {
   AggregateChartEngine,
   ChartEngine,
@@ -265,21 +266,20 @@ export const chartRouter = createTRPCRouter({
       }),
     )
     .query(async ({ input: { projectId, event } }) => {
-      const profiles = await clix(ch, 'UTC')
-        .select<Pick<IServiceProfile, 'properties'>>(['properties'])
-        .from(TABLE_NAMES.profiles)
+      // Discover keys across the full profile set in ClickHouse. The previous
+      // implementation loaded only the first 10,000 external profile maps into
+      // Node, so properties found on newer/internal profiles disappeared from
+      // the global-filter menu (including Jungle's subscription plan).
+      const profilePropertiesQuery = clix(ch)
+        .select<{ property_key: string }>([
+          'DISTINCT arrayJoin(mapKeys(properties)) AS property_key',
+        ])
+        .from(TABLE_NAMES.profiles, true)
         .where('project_id', '=', projectId)
-        .where('is_external', '=', true)
-        .limit(10_000)
-        .execute();
-
-      const profileProperties = [
-        ...new Set(
-          profiles.flatMap((p) =>
-            Object.keys(p.properties).map((k) => `profile.properties.${k}`),
-          ),
-        ),
-      ];
+        .where('property_key', '!=', '')
+        .orderBy('length(property_key)', 'ASC')
+        .orderBy('property_key', 'ASC')
+        .limit(10_000);
 
       const query = clix(ch)
         .select<{ property_key: string; created_at: string }>([
@@ -297,7 +297,13 @@ export const chartRouter = createTRPCRouter({
         query.where('name', '=', event);
       }
 
-      const res = await query.execute();
+      const [profilePropertyRows, res] = await Promise.all([
+        profilePropertiesQuery.execute(),
+        query.execute(),
+      ]);
+      const profileProperties = profilePropertyRows.map(
+        ({ property_key }) => `profile.properties.${property_key}`,
+      );
 
       const eventProperties = res.map((item) => {
         const key = item.property_key
@@ -641,8 +647,8 @@ export const chartRouter = createTRPCRouter({
     .input(
       z.object({
         projectId: z.string(),
-        firstEvent: z.array(z.string()).min(1),
-        secondEvent: z.array(z.string()).min(1),
+        firstEvent: z.array(z.string()),
+        secondEvent: z.array(z.string()),
         criteria: zCriteria.default('on_or_after'),
         startDate: z.string().nullish(),
         endDate: z.string().nullish(),
@@ -658,9 +664,8 @@ export const chartRouter = createTRPCRouter({
       let firstEvent = input.firstEvent;
       let secondEvent = input.secondEvent;
       let criteria = input.criteria;
-      // Property/cohort filters scoping the retention audience. These live
-      // alongside the event-name selector (filters[0]) on each retention
-      // series; everything except that name selector is an audience filter.
+      // Property/cohort filters scope the retention audience. Current reports
+      // may also keep an event-name selector alongside them.
       let filters = input.filters ?? [];
       const dateRange = ctx.report
         ? (input.range ?? ctx.report.range)
@@ -684,17 +689,10 @@ export const chartRouter = createTRPCRouter({
         criteria = retentionOptions?.criteria ?? criteria;
 
         const eventSeries = onlyReportEvents(ctx.report.series);
-        const extractedFirstEvent = (
-          eventSeries[0]?.filters?.[0]?.value ?? []
-        ).map(String);
-        const extractedSecondEvent = (
-          eventSeries[1]?.filters?.[0]?.value ?? []
-        ).map(String);
+        const extractedFirstEvent = getRetentionEventNames(eventSeries[0]);
+        const extractedSecondEvent = getRetentionEventNames(eventSeries[1]);
 
-        if (
-          extractedFirstEvent.length === 0 ||
-          extractedSecondEvent.length === 0
-        ) {
+        if (eventSeries.length < 2) {
           throw new Error('Report must have at least 2 event series');
         }
 
