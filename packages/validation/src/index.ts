@@ -1,6 +1,7 @@
 import {
   chartSegments,
   chartTypes,
+  filterValueTypes,
   intervals,
   lineTypes,
   metrics,
@@ -28,6 +29,13 @@ export const zChartEventFilter = z.object({
   value: z
     .array(z.string().or(z.number()).or(z.boolean()).or(z.null()))
     .describe('The values to filter on'),
+  type: z
+    .enum(objectToZodEnums(filterValueTypes))
+    .optional()
+    .describe(
+      'Cast type for the column/value in equality & comparison operators ' +
+        '(string/number/date/datetime/boolean). Absent = legacy behavior.',
+    ),
   cohortId: z
     .string()
     .optional()
@@ -263,6 +271,12 @@ export const zReportInput = z.object({
   breakdowns: zChartBreakdowns
     .default([])
     .describe('Array of dimensions to break down the data by'),
+  globalFilters: z
+    .array(zChartEventFilter)
+    .optional()
+    .describe(
+      'Filters applied to ALL event series in this report (combined with each series own filters using AND)',
+    ),
   range: zRange
     .default('30d')
     .describe('The time range for which data should be displayed'),

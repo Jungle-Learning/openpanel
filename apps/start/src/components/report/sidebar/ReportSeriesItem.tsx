@@ -102,6 +102,7 @@ export function ReportSeriesItem({
                             name: action.value,
                             operator: 'is',
                             value: [],
+                            type: 'string',
                           },
                     ],
                   }),
@@ -148,9 +149,10 @@ export function ReportSeriesItem({
         </div>
       )}
 
-      {/* Filters - only for events */}
-      {chartEvent && !isCustomEvent && !isSelectManyEvents && (
-        <FiltersList event={chartEvent} />
+      {/* Filters list. For multi-event series (retention) the first filter is
+          the event-name selector, so hide it and show only added filters. */}
+      {chartEvent && !isCustomEvent && (
+        <FiltersList event={chartEvent} skipNameFilter={isSelectManyEvents} />
       )}
     </div>
   );

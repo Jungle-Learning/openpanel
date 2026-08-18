@@ -111,14 +111,31 @@ export async function validateSdkRequest(
     throw createError('Ingestion: Profile id is blocked by project filter');
   }
 
+  // A request is server-authenticated only after its client secret verifies.
+  // Merely including a secret is not enough: origin-authenticated browser
+  // traffic may include a forged value and must still pass through bot checks.
+  const isClientSecretVerified = Boolean(
+    client.secret &&
+      clientSecret &&
+      (await getCache(
+        `client:auth:${clientId}:${Buffer.from(clientSecret).toString('base64')}`,
+        60 * 5,
+        async () => await verifyPassword(clientSecret, client.secret!),
+        true
+      ))
+  );
+  if (isClientSecretVerified) {
+    req.clientSecretAuth = true;
+  }
+
   const revenue =
     path(['payload', 'properties', '__revenue'], req.body) ??
     path(['properties', '__revenue'], req.body);
 
-  // Only allow revenue tracking if it was sent with a client secret
+  // Only allow revenue tracking if it was sent with a verified client secret
   // or if the project has allowUnsafeRevenueTracking enabled
   if (
-    !(client.project.allowUnsafeRevenueTracking || clientSecret) &&
+    !(client.project.allowUnsafeRevenueTracking || isClientSecretVerified) &&
     typeof revenue !== 'undefined'
   ) {
     throw createError(
@@ -156,16 +173,8 @@ export async function validateSdkRequest(
     }
   }
 
-  if (client.secret && clientSecret) {
-    const isVerified = await getCache(
-      `client:auth:${clientId}:${Buffer.from(clientSecret).toString('base64')}`,
-      60 * 5,
-      async () => await verifyPassword(clientSecret, client.secret!),
-      true
-    );
-    if (isVerified) {
-      return client;
-    }
+  if (isClientSecretVerified) {
+    return client;
   }
 
   throw createError('Ingestion: Invalid cors or secret');

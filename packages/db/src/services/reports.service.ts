@@ -20,11 +20,34 @@ export const onlyReportEvents = (
   return series.filter((item) => item.type === 'event');
 };
 
+/**
+ * Prepend report-level global filters to every event series' own filters.
+ * Combining is AND (filters already combine with AND in getEventFiltersWhereClause).
+ * Formulas reference other series, so they inherit the global filters transitively
+ * and are left untouched here.
+ */
+export function mergeGlobalFilters(
+  series: IChartEventItem[],
+  globalFilters: IChartEventFilter[] = [],
+): IChartEventItem[] {
+  if (!globalFilters.length) {
+    return series;
+  }
+  return series.map((item) =>
+    item.type === 'event'
+      ? { ...item, filters: [...globalFilters, ...item.filters] }
+      : item,
+  );
+}
+
 export function transformFilter(
   filter: Partial<IChartEventFilter>,
   index: number,
 ): IChartEventFilter {
   return {
+    // Preserve typed-filter and cohort metadata (and any future optional
+    // fields) while normalizing the legacy fields below.
+    ...filter,
     id: filter.id ?? alphabetIds[index] ?? 'A',
     name: filter.name ?? 'Unknown Filter',
     operator: filter.operator ?? 'is',
@@ -81,6 +104,10 @@ export function transformReport(
     series:
       (report.events as IChartEventItem[]).map(transformReportEventItem) ?? [],
     breakdowns: report.breakdowns as IChartBreakdown[],
+    globalFilters:
+      (report.globalFilters as IChartEventFilter[] | null)?.map(
+        transformFilter,
+      ) ?? [],
     range: report.range as IChartRange,
     previous: report.previous ?? false,
     formula: report.formula ?? undefined,

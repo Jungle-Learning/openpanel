@@ -206,6 +206,7 @@ export const applyFiltersSchema = z.object({
       '30d',
       '6m',
       '12m',
+      '16m',
       'monthToDate',
       'lastMonth',
       'yearToDate',

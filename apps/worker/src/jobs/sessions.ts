@@ -11,6 +11,8 @@ import {
 import { cacheable } from '@openpanel/redis';
 import { createSessionEnd } from './events.create-session-end';
 
+const INT4_MAX = 2_147_483_647;
+
 export async function sessionsJob(job: Job<SessionsQueuePayload>) {
   const res = await createSessionEnd(job);
   try {
@@ -51,22 +53,34 @@ const updateEventsCount = cacheable(async function updateEventsCount(
         id: projectId,
       },
       data: {
-        eventsCount: projectEventsCount,
+        // Saturating counter: the column is INT4 and lifetime counts can
+        // exceed it. It's only used as a sort key and activity threshold,
+        // never for billing, so clamping is safe.
+        eventsCount: Math.min(projectEventsCount, INT4_MAX),
       },
     });
   }
 
   if (organizationEventsCount) {
+    // Self-hosting has no billing/event limits. Never flag the org as
+    // exceeded, and clear any stale flag that was set before this guard
+    // existed (default limit is 0, which otherwise trips on the first event).
+    const isSelfHosted = process.env.SELF_HOSTED === 'true';
+
     await db.organization.update({
       where: {
         id: organization.id,
       },
       data: {
-        subscriptionPeriodEventsCount: organizationEventsCount,
-        subscriptionPeriodEventsCountExceededAt:
-          organizationEventsCount >
-            organization.subscriptionPeriodEventsLimit &&
-          !organization.subscriptionPeriodEventsCountExceededAt
+        subscriptionPeriodEventsCount: Math.min(
+          organizationEventsCount,
+          INT4_MAX,
+        ),
+        subscriptionPeriodEventsCountExceededAt: isSelfHosted
+          ? null
+          : organizationEventsCount >
+                organization.subscriptionPeriodEventsLimit &&
+              !organization.subscriptionPeriodEventsCountExceededAt
             ? new Date()
             : organizationEventsCount <=
                 organization.subscriptionPeriodEventsLimit

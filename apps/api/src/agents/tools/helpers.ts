@@ -169,6 +169,7 @@ const PRESET_RANGES: ReadonlySet<IChartRange> = new Set([
   '30d',
   '6m',
   '12m',
+  '16m',
   'monthToDate',
   'lastMonth',
   'yearToDate',
