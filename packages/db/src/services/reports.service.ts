@@ -45,6 +45,9 @@ export function transformFilter(
   index: number,
 ): IChartEventFilter {
   return {
+    // Preserve typed-filter and cohort metadata (and any future optional
+    // fields) while normalizing the legacy fields below.
+    ...filter,
     id: filter.id ?? alphabetIds[index] ?? 'A',
     name: filter.name ?? 'Unknown Filter',
     operator: filter.operator ?? 'is',

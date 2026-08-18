@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   mergeGlobalFilters,
+  transformFilter,
   transformReportEventItem,
 } from './reports.service';
 
@@ -47,6 +48,61 @@ describe('transformReportEventItem', () => {
     ).toMatchObject({
       eventNames: ['answer', 'generation'],
       setOperation: 'union',
+    });
+  });
+
+  it('preserves typed and cohort filter metadata when hydrating a report', () => {
+    expect(
+      transformReportEventItem(
+        {
+          id: 'retained-users',
+          type: 'event',
+          name: 'screen_view',
+          segment: 'user',
+          filters: [
+            {
+              id: 'cohort-filter',
+              name: 'signup_date',
+              operator: 'inCohort',
+              value: [],
+              type: 'date',
+              cohortId: 'legacy-cohort',
+              cohortIds: ['cohort-a', 'cohort-b'],
+            },
+          ],
+        },
+        0,
+      ),
+    ).toMatchObject({
+      filters: [
+        {
+          type: 'date',
+          cohortId: 'legacy-cohort',
+          cohortIds: ['cohort-a', 'cohort-b'],
+        },
+      ],
+    });
+  });
+});
+
+describe('transformFilter', () => {
+  it('normalizes legacy scalar values without dropping optional metadata', () => {
+    expect(
+      transformFilter(
+        {
+          name: 'amount',
+          operator: 'is',
+          value: '12.50' as never,
+          type: 'number',
+        },
+        0,
+      ),
+    ).toEqual({
+      id: 'A',
+      name: 'amount',
+      operator: 'is',
+      value: ['12.50'],
+      type: 'number',
     });
   });
 });

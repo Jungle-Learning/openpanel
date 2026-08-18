@@ -251,9 +251,19 @@ const LUXON_UNIT: Record<IRetentionInterval, 'days' | 'weeks' | 'months'> = {
   month: 'months',
 };
 
-// Normalize an ISO or `yyyy-MM-dd HH:mm:ss` string into ClickHouse date-time form.
-function utc(date: string) {
-  return date.replace('T', ' ').slice(0, 19);
+// Normalize an ISO or SQL date string into a UTC ClickHouse date-time. Invalid
+// input is rejected before query construction, and the normalized value is
+// escaped again at interpolation time as defense in depth.
+export function normalizeRetentionDateTime(date: string): string {
+  const parsedIsoDate = DateTime.fromISO(date, { zone: 'utc' });
+  const parsedSqlDate = DateTime.fromSQL(date, { zone: 'utc' });
+  const parsedDate = parsedIsoDate.isValid ? parsedIsoDate : parsedSqlDate;
+
+  if (!parsedDate.isValid) {
+    throw new Error(`Invalid retention date: ${date}`);
+  }
+
+  return parsedDate.toUTC().toFormat('yyyy-MM-dd HH:mm:ss');
 }
 
 // Number of `interval` buckets spanned by [startDate, endDate]; drives the
@@ -264,12 +274,16 @@ function diffIntervalCount(
   interval: IRetentionInterval
 ) {
   const unit = LUXON_UNIT[interval];
-  const start = DateTime.fromFormat(utc(startDate), 'yyyy-MM-dd HH:mm:ss', {
-    zone: 'utc',
-  });
-  const end = DateTime.fromFormat(utc(endDate), 'yyyy-MM-dd HH:mm:ss', {
-    zone: 'utc',
-  });
+  const start = DateTime.fromFormat(
+    normalizeRetentionDateTime(startDate),
+    'yyyy-MM-dd HH:mm:ss',
+    { zone: 'utc' }
+  );
+  const end = DateTime.fromFormat(
+    normalizeRetentionDateTime(endDate),
+    'yyyy-MM-dd HH:mm:ss',
+    { zone: 'utc' }
+  );
   return Math.max(0, Math.floor(end.diff(start, unit).as(unit)));
 }
 
@@ -301,8 +315,10 @@ export async function getRetentionCohort(input: IGetRetentionCohortInput) {
   const sqlToStartOf = SQL_START_OF[interval];
   const countCriteria: '>=' | '=' = criteria === 'on_or_after' ? '>=' : '=';
 
-  const start = utc(startDate);
-  const end = utc(endDate);
+  const start = normalizeRetentionDateTime(startDate);
+  const end = normalizeRetentionDateTime(endDate);
+  const escapedStart = sqlstring.escape(start);
+  const escapedEnd = sqlstring.escape(end);
   const escProject = sqlstring.escape(projectId);
   const firstWhere = eventNameWhere(firstEvent);
   const secondWhere = eventNameWhere(secondEvent);
@@ -352,8 +368,8 @@ export async function getRetentionCohort(input: IGetRetentionCohortInput) {
       FROM ${source}
       WHERE ${baseWhere}
         ${firstWhere ? `AND ${firstWhere}` : ''}
-        AND created_at >= toDateTime('${start}')
-        AND created_at <= toDateTime('${end}')
+        AND created_at >= toDateTime(${escapedStart})
+        AND created_at <= toDateTime(${escapedEnd})
       GROUP BY profile_id
     ),
     last_event AS (
@@ -363,8 +379,8 @@ export async function getRetentionCohort(input: IGetRetentionCohortInput) {
       FROM ${source}
       WHERE ${baseWhere}
         ${secondWhere ? `AND ${secondWhere}` : ''}
-        AND created_at >= toDateTime('${start}')
-        AND created_at <= toDateTime('${end}') + INTERVAL ${diffInterval} ${sqlInterval}
+        AND created_at >= toDateTime(${escapedStart})
+        AND created_at <= toDateTime(${escapedEnd}) + INTERVAL ${diffInterval} ${sqlInterval}
     ),
     retention_matrix AS (
       SELECT

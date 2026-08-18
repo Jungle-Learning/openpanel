@@ -12,11 +12,26 @@ import {
   getRetentionCohort,
   getRetentionSeries,
   type IRetentionCohortRow,
+  normalizeRetentionDateTime,
   processCohortData,
 } from './retention.service';
 
 const PROJECT_ID = 'test-retention-cohort';
 const { day, week } = RETENTION_FIXTURE;
+
+describe('normalizeRetentionDateTime', () => {
+  it('normalizes ISO offsets to UTC ClickHouse time', () => {
+    expect(
+      normalizeRetentionDateTime('2026-08-18T05:30:00-04:00')
+    ).toBe('2026-08-18 09:30:00');
+  });
+
+  it('rejects malformed date input before query construction', () => {
+    expect(() =>
+      normalizeRetentionDateTime("2026-08-18' OR 1 = 1")
+    ).toThrow('Invalid retention date');
+  });
+});
 
 // Keep only the per-cohort rows (drop the leading "Weighted Average" row) and
 // the fields the blueprint pins down.
