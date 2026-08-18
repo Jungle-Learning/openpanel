@@ -93,6 +93,11 @@ export async function bootCron() {
       type: 'cohortRefresh',
       pattern: '*/30 * * * *',
     },
+    {
+      name: 'insightCleanup',
+      type: 'insightCleanup',
+      pattern: '30 4 * * *', // daily at 04:30 UTC — prune stale insights/events
+    },
   ];
 
   if (process.env.SELF_HOSTED && process.env.NODE_ENV === 'production') {

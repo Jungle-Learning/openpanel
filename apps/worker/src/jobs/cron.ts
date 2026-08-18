@@ -6,6 +6,7 @@ import type { CronQueuePayload } from '@openpanel/queue';
 import { cohortRefreshCronJob } from './cron.cohort-refresh';
 import { jobdeleteProjects } from './cron.delete-projects';
 import { gscSyncAllJob } from './gsc';
+import { insightCleanupCronJob } from './cron.insight-cleanup';
 import { onboardingJob } from './cron.onboarding';
 import { ping } from './cron.ping';
 import { salt } from './cron.salt';
@@ -51,6 +52,9 @@ export async function cronJob(job: Job<CronQueuePayload>) {
     }
     case 'cohortRefresh': {
       return await cohortRefreshCronJob();
+    }
+    case 'insightCleanup': {
+      return await insightCleanupCronJob();
     }
   }
 }

@@ -24,6 +24,7 @@ import EditMember from './edit-member';
 import EditReference from './edit-reference';
 import EditReport from './edit-report';
 import EventDetails from './event-details';
+import InsightDetails from './insight-details';
 import Instructions from './Instructions';
 import OverviewChartDetails from './overview-chart-details';
 import OverviewFilters from './overview-filters';
@@ -54,6 +55,7 @@ const modals = {
   EditEvent,
   EditMember,
   EventDetails,
+  InsightDetails,
   EditClient,
   AddProject,
   AddClient,
