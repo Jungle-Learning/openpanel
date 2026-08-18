@@ -56,6 +56,11 @@ export const timeWindows = {
     label: 'Last 12 months',
     shortcut: '0',
   },
+  '16m': {
+    key: '16m',
+    label: 'Last 16 months',
+    shortcut: 'I',
+  },
   monthToDate: {
     key: 'monthToDate',
     label: 'Month to Date',

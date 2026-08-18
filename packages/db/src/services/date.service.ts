@@ -153,6 +153,24 @@ export function getDatesFromRange(range: IChartRange, timezone: string) {
     };
   }
 
+  if (range === '16m') {
+    const startDate = DateTime.now()
+      .minus({ month: 15 })
+      .setZone(timezone)
+      .startOf('month')
+      .toFormat('yyyy-MM-dd HH:mm:ss');
+    const endDate = DateTime.now()
+      .setZone(timezone)
+      .endOf('month')
+      .plus({ millisecond: 1 })
+      .toFormat('yyyy-MM-dd HH:mm:ss');
+
+    return {
+      startDate,
+      endDate,
+    };
+  }
+
   if (range === 'monthToDate') {
     const startDate = DateTime.now()
       .setZone(timezone)
