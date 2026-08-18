@@ -6,7 +6,7 @@
 // causes. The caller gathers the data (DB/CH); this module just narrates.
 import { betterAgent, defineAgent } from '@better-agent/core';
 import { z } from 'zod';
-import { ALLOWED_MODELS, resolveModel } from './providers';
+import { ALLOWED_MODELS, resolveModel } from './providers.ts';
 
 // gpt-4.1 (the larger non-reasoning model) synthesizes the supplied breakdown
 // well without reasoning-option plumbing. Swap to a reasoning model later if

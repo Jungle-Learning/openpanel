@@ -31,6 +31,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # Apps
 COPY apps/worker/package.json ./apps/worker/
 # Packages
+COPY packages/ai/package.json ./packages/ai/
 COPY packages/db/package.json ./packages/db/
 COPY packages/geo/package.json ./packages/geo/
 COPY packages/json/package.json ./packages/json/
@@ -82,6 +83,7 @@ COPY --from=prod /app/node_modules ./node_modules
 COPY --from=build /app/apps/worker ./apps/worker
 
 # Packages
+COPY --from=build /app/packages/ai ./packages/ai
 COPY --from=build /app/packages/db ./packages/db
 COPY --from=build /app/packages/geo ./packages/geo
 COPY --from=build /app/packages/json ./packages/json
