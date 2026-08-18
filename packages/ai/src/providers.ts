@@ -4,11 +4,11 @@
 // `@openpanel/validation` instead.
 import { createAnthropic } from '@better-agent/providers/anthropic';
 import { createOpenAI } from '@better-agent/providers/openai';
-import type { ChatModelEntry } from '@openpanel/validation';
+import type { ChatModelEntry } from '@openpanel/validation/src/chat.ts';
 import { z } from 'zod';
 
-export type { ChatModelEntry } from '@openpanel/validation';
-export { CHAT_MODELS as ALLOWED_MODELS } from '@openpanel/validation';
+export type { ChatModelEntry } from '@openpanel/validation/src/chat.ts';
+export { CHAT_MODELS as ALLOWED_MODELS } from '@openpanel/validation/src/chat.ts';
 
 const openAiEnvSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),

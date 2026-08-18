@@ -5,7 +5,7 @@
 // writes the results back (this module stays db-free).
 import { betterAgent, defineAgent } from '@better-agent/core';
 import { z } from 'zod';
-import { ALLOWED_MODELS, resolveModel } from './providers';
+import { ALLOWED_MODELS, resolveModel } from './providers.ts';
 
 // Bump when the prompt or output shape changes — the worker re-enriches any
 // insight whose stored enrichVersion is below this.
