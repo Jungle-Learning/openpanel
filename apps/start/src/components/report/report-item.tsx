@@ -8,10 +8,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/utils/cn';
 import { CopyIcon, MoreHorizontal, Trash } from 'lucide-react';
-
-import { timeWindows } from '@openpanel/constants';
-
 import { useRouter } from '@tanstack/react-router';
+import { getReportTimeWindowLabel } from './report-item-utils';
 
 export function ReportItemSkeleton() {
   return (
@@ -53,7 +51,12 @@ export function ReportItem({
   onDuplicate: (reportId: string) => void;
 }) {
   const router = useRouter();
-  const chartRange = report.range;
+  const timeWindowLabel = getReportTimeWindowLabel({
+    savedRange: report.range,
+    overrideRange: range,
+    overrideStartDate: startDate,
+    overrideEndDate: endDate,
+  });
 
   return (
     <div className="card h-full flex flex-col">
@@ -93,28 +96,9 @@ export function ReportItem({
           tabIndex={0}
         >
           <div className="font-medium">{report.name}</div>
-          {chartRange !== null && (
-            <div className="mt-2 flex gap-2 ">
-              <span
-                className={
-                  (chartRange !== range && range !== null) ||
-                  (startDate && endDate)
-                    ? 'line-through'
-                    : ''
-                }
-              >
-                {timeWindows[chartRange as keyof typeof timeWindows]?.label}
-              </span>
-              {startDate && endDate ? (
-                <span>Custom dates</span>
-              ) : (
-                range !== null &&
-                chartRange !== range && (
-                  <span>
-                    {timeWindows[range as keyof typeof timeWindows]?.label}
-                  </span>
-                )
-              )}
+          {timeWindowLabel && (
+            <div className="mt-2 text-sm text-muted-foreground">
+              {timeWindowLabel}
             </div>
           )}
         </div>
@@ -200,35 +184,21 @@ export function ReportItemReadOnly({
   endDate: any;
   interval: any;
 }) {
-  const chartRange = report.range;
+  const timeWindowLabel = getReportTimeWindowLabel({
+    savedRange: report.range,
+    overrideRange: range,
+    overrideStartDate: startDate,
+    overrideEndDate: endDate,
+  });
 
   return (
     <div className="card h-full flex flex-col">
       <div className="flex items-center justify-between border-b border-border p-4 leading-none">
         <div className="flex-1">
           <div className="font-medium">{report.name}</div>
-          {chartRange !== null && (
-            <div className="mt-2 flex gap-2 ">
-              <span
-                className={
-                  (chartRange !== range && range !== null) ||
-                  (startDate && endDate)
-                    ? 'line-through'
-                    : ''
-                }
-              >
-                {timeWindows[chartRange as keyof typeof timeWindows]?.label}
-              </span>
-              {startDate && endDate ? (
-                <span>Custom dates</span>
-              ) : (
-                range !== null &&
-                chartRange !== range && (
-                  <span>
-                    {timeWindows[range as keyof typeof timeWindows]?.label}
-                  </span>
-                )
-              )}
+          {timeWindowLabel && (
+            <div className="mt-2 text-sm text-muted-foreground">
+              {timeWindowLabel}
             </div>
           )}
         </div>

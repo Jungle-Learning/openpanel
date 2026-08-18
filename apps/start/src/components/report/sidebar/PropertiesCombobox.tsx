@@ -23,7 +23,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { useAppParams } from '@/hooks/use-app-params';
 import { useEventProperties } from '@/hooks/use-event-properties';
+import { useProfileProperties } from '@/hooks/use-profile-properties';
 import { useTRPC } from '@/integrations/trpc/react';
+import { getProfilePropertyNames } from './profile-property-utils';
 
 export type PropertiesComboboxAction = {
   value: string;
@@ -139,6 +141,9 @@ export function PropertiesCombobox({
     event: event?.name,
     projectId,
   });
+  const profileProperties = useProfileProperties(projectId, {
+    enabled: categories.includes('profile'),
+  });
   const groupPropertiesQuery = useQuery(
     trpc.group.properties.queryOptions(
       { projectId },
@@ -163,6 +168,7 @@ export function PropertiesCombobox({
   useEffect(() => {
     if (!open) {
       setState(initialState);
+      setSearch('');
     }
   }, [open, initialState]);
 
@@ -189,11 +195,12 @@ export function PropertiesCombobox({
     })),
   ].filter((a) => shouldShowProperty(a.value));
 
-  const profileActions = allProperties
-    .filter(
-      (property) =>
-        property.startsWith('profile') && shouldShowProperty(property)
-    )
+  const profileActions = getProfilePropertyNames({
+    eventProperties: properties,
+    profileProperties,
+    includedProperties: include,
+  })
+    .filter(shouldShowProperty)
     .map((property) => ({
       value: property,
       label: property.split('.').pop() ?? property,
@@ -202,7 +209,7 @@ export function PropertiesCombobox({
   const eventActions = allProperties
     .filter(
       (property) =>
-        !property.startsWith('profile') && shouldShowProperty(property)
+        !property.startsWith('profile.') && shouldShowProperty(property)
     )
     .map((property) => ({
       value: property,
@@ -314,26 +321,32 @@ export function PropertiesCombobox({
           value={search}
         />
         <DropdownMenuSeparator />
-        <VirtualList
-          data={filtered}
-          height={Math.min(300, Math.max(40, filtered.length * 40 + 8))}
-          itemHeight={40}
-          itemKey={options.itemKey ?? 'value'}
-        >
-          {(action) => (
-            <motion.div
-              animate={{ opacity: 1, y: 0 }}
-              className="col cursor-pointer gap-px rounded-md p-2 hover:bg-accent"
-              initial={{ opacity: 0, y: 10 }}
-              onClick={() => handleSelect(action)}
-            >
-              <div className="font-medium">{action.label}</div>
-              <div className="text-muted-foreground text-sm">
-                {action.description}
-              </div>
-            </motion.div>
-          )}
-        </VirtualList>
+        {filtered.length === 0 ? (
+          <div className="p-3 text-center text-sm text-muted-foreground">
+            No properties found
+          </div>
+        ) : (
+          <VirtualList
+            data={filtered}
+            height={Math.min(300, Math.max(40, filtered.length * 40 + 8))}
+            itemHeight={40}
+            itemKey={options.itemKey ?? 'value'}
+          >
+            {(action) => (
+              <motion.div
+                animate={{ opacity: 1, y: 0 }}
+                className="col cursor-pointer gap-px rounded-md p-2 hover:bg-accent"
+                initial={{ opacity: 0, y: 10 }}
+                onClick={() => handleSelect(action)}
+              >
+                <div className="font-medium">{action.label}</div>
+                <div className="text-muted-foreground text-sm">
+                  {action.description}
+                </div>
+              </motion.div>
+            )}
+          </VirtualList>
+        )}
       </div>
     );
   };

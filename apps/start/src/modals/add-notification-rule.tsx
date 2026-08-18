@@ -18,6 +18,7 @@ import { ModalHeader } from './Modal/Container';
 import { ColorSquare } from '@/components/color-square';
 import { InputWithLabel, WithLabel } from '@/components/forms/input-with-label';
 import { PureFilterItem } from '@/components/report/sidebar/filters/FilterItem';
+import { normalizeProfilePropertyName } from '@/components/report/sidebar/profile-property-utils';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { ComboboxAdvanced } from '@/components/ui/combobox-advanced';
@@ -27,6 +28,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAppParams } from '@/hooks/use-app-params';
 import { useEventNames } from '@/hooks/use-event-names';
 import { useEventProperties } from '@/hooks/use-event-properties';
+import { useProfileProperties } from '@/hooks/use-profile-properties';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/trpc/client';
 
@@ -269,7 +271,14 @@ function EventField({
     control: form.control,
     name: `config.events.${index}.name`,
   });
-  const properties = useEventProperties({ projectId });
+  const eventProperties = useEventProperties({ projectId });
+  const profileProperties = useProfileProperties(projectId);
+  const properties = Array.from(
+    new Set([
+      ...eventProperties,
+      ...profileProperties.map(normalizeProfilePropertyName),
+    ]),
+  );
 
   return (
     <div className="rounded border bg-def-100">

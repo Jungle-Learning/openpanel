@@ -88,7 +88,9 @@ export default function ReportEditor({
               className="min-w-0 flex-1"
               endDate={report.endDate}
               onChange={(value) => {
-                dispatch(changeDateRanges(value));
+                if (value) {
+                  dispatch(changeDateRanges(value));
+                }
               }}
               onEndDateChange={(date) => dispatch(changeEndDate(date))}
               onIntervalChange={(interval) =>

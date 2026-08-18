@@ -26,14 +26,15 @@ import { cn } from '@/utils/cn';
 import { shouldIgnoreKeypress } from '@/utils/should-ignore-keypress';
 
 interface Props {
-  value: IChartRange;
-  onChange: (value: IChartRange) => void;
+  value: IChartRange | null;
+  onChange: (value: IChartRange | null) => void;
   onStartDateChange: (date: string) => void;
   onEndDateChange: (date: string) => void;
   onIntervalChange: (interval: IInterval) => void;
   endDate: string | null;
   startDate: string | null;
   className?: string;
+  showDefault?: boolean;
 }
 
 const customTimeWindowOptions: Array<{
@@ -55,12 +56,13 @@ export function TimeWindowPicker({
   onEndDateChange,
   onIntervalChange,
   className,
+  showDefault = false,
 }: Props) {
   const isDateRangerPickerOpen = useRef(false);
   useOnPushModal('DateRangerPicker', (open) => {
     isDateRangerPickerOpen.current = open;
   });
-  const timeWindow = timeWindows[value ?? '30d'];
+  const timeWindow = value ? timeWindows[value] : undefined;
   const [open, setOpen] = useState(false);
   const [customTimeWindowKey, setCustomTimeWindowKey] = useState(0);
 
@@ -133,12 +135,23 @@ export function TimeWindowPicker({
           icon={CalendarIcon}
           variant="outline"
         >
-          {timeWindow?.label}
+          {showDefault && value === null ? 'Default' : timeWindow?.label}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56">
         <DropdownMenuLabel>Time window</DropdownMenuLabel>
         <DropdownMenuSeparator />
+
+        {showDefault && (
+          <>
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => onChange(null)}>
+                Default
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+          </>
+        )}
 
         <DropdownMenuGroup>
           <DropdownMenuItem onClick={() => onChange(timeWindows['30min'].key)}>

@@ -1,5 +1,6 @@
 import { FullPageEmptyState } from '@/components/full-page-empty-state';
-import { useOverviewOptions } from '@/components/overview/useOverviewOptions';
+import { DashboardTimeControls } from '@/components/dashboard/dashboard-time-controls';
+import { useDashboardOptions } from '@/components/dashboard/use-dashboard-options';
 import { Button, LinkButton } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -26,8 +27,6 @@ import {
   type Layout,
   useReportLayouts,
 } from '@/components/grafana-grid';
-import { OverviewInterval } from '@/components/overview/overview-interval';
-import { OverviewRange } from '@/components/overview/overview-range';
 import { PageContainer } from '@/components/page-container';
 import { PageHeader } from '@/components/page-header';
 import {
@@ -89,7 +88,7 @@ function Component() {
   const { organizationId, dashboardId, projectId } = Route.useParams();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { range, startDate, endDate, interval } = useOverviewOptions();
+  const { range, startDate, endDate, interval } = useDashboardOptions();
 
   const dashboardQuery = useQuery(
     trpc.dashboard.byId.queryOptions({
@@ -290,19 +289,19 @@ function Component() {
         actions={
           <>
             {reports.length > 0 && (
-              <div className="relative">
-                <SearchIcon className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <div className="flex h-8 items-center rounded-md border border-input bg-card ring-offset-background focus-within:ring-1 focus-within:ring-ring focus-within:ring-offset-1">
+                <SearchIcon className="ml-3 size-4 shrink-0 text-muted-foreground pointer-events-none" />
                 <Input
                   type="search"
+                  aria-label="Search reports"
                   placeholder="Search reports..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="pl-8 w-[180px] sm:w-[220px]"
+                  className="h-full w-[148px] border-0 bg-transparent px-2 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 sm:w-[188px]"
                 />
               </div>
             )}
-            <OverviewRange />
-            <OverviewInterval />
+            <DashboardTimeControls />
             <LinkButton
               from={Route.fullPath}
               to={'/$organizationId/$projectId/reports'}

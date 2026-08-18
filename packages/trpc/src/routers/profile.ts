@@ -56,17 +56,25 @@ export const profileRouter = createTRPCRouter({
   properties: protectedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ input: { projectId } }) => {
-      const events = await chQuery<{ keys: string[] }>(
-        `SELECT distinct mapKeys(properties) as keys from ${TABLE_NAMES.profiles} where project_id = ${sqlstring.escape(projectId)};`,
+      const propertyRows = await chQuery<{ property_key: string }>(
+        `SELECT DISTINCT arrayJoin(mapKeys(properties)) AS property_key FROM ${TABLE_NAMES.profiles} WHERE project_id = ${sqlstring.escape(projectId)} ORDER BY length(property_key), property_key LIMIT 10000`,
       );
 
-      const properties = events
-        .flatMap((event) => event.keys)
-        .map((item) => item.replace(/\.([0-9]+)\./g, '.*.'))
-        .map((item) => item.replace(/\.([0-9]+)/g, '[*]'))
-        .map((item) => `properties.${item}`);
+      const properties = propertyRows
+        .map(({ property_key }) => property_key)
+        .filter(Boolean)
+        .map((property) => property.replace(/\.([0-9]+)\./g, '.*.'))
+        .map((property) => property.replace(/\.([0-9]+)/g, '[*]'))
+        .map((property) => `properties.${property}`);
 
-      properties.push('id', 'first_name', 'last_name', 'email');
+      properties.push(
+        'id',
+        'first_name',
+        'last_name',
+        'email',
+        'created_at',
+        'last_seen_at',
+      );
 
       return pipe(
         sort<string>((a, b) => a.length - b.length),

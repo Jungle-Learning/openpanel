@@ -266,21 +266,6 @@ export const chartRouter = createTRPCRouter({
       }),
     )
     .query(async ({ input: { projectId, event } }) => {
-      // Discover keys across the full profile set in ClickHouse. The previous
-      // implementation loaded only the first 10,000 external profile maps into
-      // Node, so properties found on newer/internal profiles disappeared from
-      // the global-filter menu (including Jungle's subscription plan).
-      const profilePropertiesQuery = clix(ch)
-        .select<{ property_key: string }>([
-          'DISTINCT arrayJoin(mapKeys(properties)) AS property_key',
-        ])
-        .from(TABLE_NAMES.profiles, true)
-        .where('project_id', '=', projectId)
-        .where('property_key', '!=', '')
-        .orderBy('length(property_key)', 'ASC')
-        .orderBy('property_key', 'ASC')
-        .limit(10_000);
-
       const query = clix(ch)
         .select<{ property_key: string; created_at: string }>([
           'distinct property_key',
@@ -297,13 +282,7 @@ export const chartRouter = createTRPCRouter({
         query.where('name', '=', event);
       }
 
-      const [profilePropertyRows, res] = await Promise.all([
-        profilePropertiesQuery.execute(),
-        query.execute(),
-      ]);
-      const profileProperties = profilePropertyRows.map(
-        ({ property_key }) => `profile.properties.${property_key}`,
-      );
+      const res = await query.execute();
 
       const eventProperties = res.map((item) => {
         const key = item.property_key
@@ -330,19 +309,12 @@ export const chartRouter = createTRPCRouter({
         'device',
         'brand',
         'model',
-        'profile.id',
-        'profile.first_name',
-        'profile.last_name',
-        'profile.email',
-        'profile.created_at',
-        'profile.last_seen_at',
       ];
 
       const properties = [
         ...eventProperties,
         ...(event === '*' || !event ? ['name'] : []),
         ...fixedProperties,
-        ...profileProperties,
       ];
 
       return pipe(

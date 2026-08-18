@@ -1,11 +1,10 @@
 import { ShareEnterPassword } from '@/components/auth/share-enter-password';
+import { DashboardTimeControls } from '@/components/dashboard/dashboard-time-controls';
+import { useDashboardOptions } from '@/components/dashboard/use-dashboard-options';
 import { FullPageEmptyState } from '@/components/full-page-empty-state';
 import FullPageLoadingState from '@/components/full-page-loading-state';
 import { GrafanaGrid, useReportLayouts } from '@/components/grafana-grid';
 import { LoginNavbar } from '@/components/login-navbar';
-import { OverviewInterval } from '@/components/overview/overview-interval';
-import { OverviewRange } from '@/components/overview/overview-range';
-import { useOverviewOptions } from '@/components/overview/useOverviewOptions';
 import { ReportChart } from '@/components/report-chart';
 import {
   ReportItem,
@@ -68,7 +67,7 @@ function RouteComponent() {
   const { shareId } = Route.useParams();
   const { header } = useSearch({ from: '/share/dashboard/$shareId' });
   const trpc = useTRPC();
-  const { range, startDate, endDate, interval } = useOverviewOptions();
+  const { range, startDate, endDate, interval } = useDashboardOptions();
 
   const shareQuery = useSuspenseQuery(
     trpc.share.dashboard.queryOptions({
@@ -118,8 +117,7 @@ function RouteComponent() {
         <div className="p-4 col gap-2 mx-auto max-w-7xl">
           <div className="row justify-between">
             <div className="flex gap-2">
-              <OverviewRange />
-              <OverviewInterval />
+              <DashboardTimeControls />
             </div>
           </div>
         </div>
