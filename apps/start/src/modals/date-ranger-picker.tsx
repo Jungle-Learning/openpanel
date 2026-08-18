@@ -1,14 +1,12 @@
 import { getDefaultIntervalByDates } from '@openpanel/constants';
 import type { IInterval } from '@openpanel/validation';
-import { endOfDay, subMonths } from 'date-fns';
+import { endOfDay, format, isAfter, subMonths } from 'date-fns';
 import { CheckIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 import { popModal } from '.';
 import { ModalContent } from './Modal/Container';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { useBreakpoint } from '@/hooks/use-breakpoint';
-import { formatDate } from '@/utils/date';
 
 interface Props {
   onChange: (payload: {
@@ -24,38 +22,69 @@ export default function DateRangerPicker({
   startDate: initialStartDate,
   endDate: initialEndDate,
 }: Props) {
-  const { isBelowSm } = useBreakpoint('sm');
+  const now = new Date();
+  const maximumSelectableDate = endOfDay(now);
+  const isInitialEndDateAfterToday =
+    initialEndDate !== undefined &&
+    isAfter(initialEndDate, maximumSelectableDate);
+  // Relative ranges use tomorrow at midnight as an exclusive query boundary.
+  // The calendar presents that boundary as the final included day: today.
+  const selectableInitialEndDate = isInitialEndDateAfterToday
+    ? now
+    : initialEndDate;
   const [startDate, setStartDate] = useState(initialStartDate);
-  const [endDate, setEndDate] = useState(initialEndDate);
+  const [endDate, setEndDate] = useState(selectableInitialEndDate);
+  const [startCalendarMonth, setStartCalendarMonth] = useState(
+    initialStartDate ?? subMonths(now, 1)
+  );
+  const [endCalendarMonth, setEndCalendarMonth] = useState(
+    selectableInitialEndDate ?? now
+  );
+  const hasValidRange =
+    startDate !== undefined &&
+    endDate !== undefined &&
+    !isAfter(startDate, endDate);
 
   return (
     <ModalContent className="min-w-fit p-4 md:p-8">
-      <Calendar
-        captionLayout="dropdown"
-        className="mx-auto min-h-[310px] p-0 [&_table]:mx-auto [&_table]:w-auto"
-        defaultMonth={subMonths(
-          startDate ? new Date(startDate) : new Date(),
-          isBelowSm ? 0 : 1
-        )}
-        hidden={{
-          after: endOfDay(new Date()),
-        }}
-        initialFocus
-        mode="range"
-        numberOfMonths={isBelowSm ? 1 : 2}
-        onSelect={(range) => {
-          if (range?.from) {
-            setStartDate(range.from);
-          }
-          if (range?.to) {
-            setEndDate(range.to);
-          }
-        }}
-        selected={{
-          from: startDate,
-          to: endDate,
-        }}
-      />
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="col gap-2">
+          <div className="text-center font-medium text-sm">Start date</div>
+          <Calendar
+            aria-label="Start date"
+            captionLayout="dropdown"
+            className="mx-auto min-h-[310px] p-0 [&_table]:mx-auto [&_table]:w-auto"
+            endMonth={maximumSelectableDate}
+            hidden={{ after: maximumSelectableDate }}
+            initialFocus
+            mode="single"
+            month={startCalendarMonth}
+            onMonthChange={setStartCalendarMonth}
+            onSelect={setStartDate}
+            selected={startDate}
+          />
+        </div>
+        <div className="col gap-2">
+          <div className="text-center font-medium text-sm">End date</div>
+          <Calendar
+            aria-label="End date"
+            captionLayout="dropdown"
+            className="mx-auto min-h-[310px] p-0 [&_table]:mx-auto [&_table]:w-auto"
+            endMonth={maximumSelectableDate}
+            hidden={{ after: maximumSelectableDate }}
+            mode="single"
+            month={endCalendarMonth}
+            onMonthChange={setEndCalendarMonth}
+            onSelect={setEndDate}
+            selected={endDate}
+          />
+        </div>
+      </div>
+      {startDate && endDate && !hasValidRange && (
+        <div className="text-center text-destructive text-sm">
+          Start date must be before end date.
+        </div>
+      )}
       <div className="col md:row flex-col-reverse gap-2">
         <Button
           icon={XIcon}
@@ -66,28 +95,24 @@ export default function DateRangerPicker({
           Cancel
         </Button>
 
-        {startDate && endDate && (
+        {hasValidRange && (
           <Button
             className="md:ml-auto"
-            icon={startDate && endDate ? CheckIcon : XIcon}
+            icon={CheckIcon}
             onClick={() => {
               popModal();
-              if (startDate && endDate) {
-                onChange({
-                  startDate,
-                  endDate,
-                  interval: getDefaultIntervalByDates(
-                    startDate.toISOString(),
-                    endDate.toISOString()
-                  )!,
-                });
-              }
+              onChange({
+                startDate,
+                endDate,
+                interval: getDefaultIntervalByDates(
+                  startDate.toISOString(),
+                  endDate.toISOString()
+                )!,
+              });
             }}
             type="button"
           >
-            {startDate && endDate
-              ? `Select ${formatDate(startDate)} - ${formatDate(endDate)}`
-              : 'Cancel'}
+            {`Select ${format(startDate, 'MM/dd/yyyy')} - ${format(endDate, 'MM/dd/yyyy')}`}
           </Button>
         )}
       </div>

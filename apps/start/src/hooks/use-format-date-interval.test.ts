@@ -22,7 +22,7 @@ describe('formatDateInterval', () => {
         interval: 'month',
         date: '2026-08-01',
         short: false,
-      }),
+      })
     ).toBe('Aug');
   });
 
@@ -36,7 +36,27 @@ describe('formatDateInterval', () => {
 
   it('preserves timestamp strings as instants', () => {
     expect(parseChartDate('2026-08-01T12:30:00.000Z').toISOString()).toBe(
-      '2026-08-01T12:30:00.000Z',
+      '2026-08-01T12:30:00.000Z'
     );
+  });
+
+  it('formats daily chart dates in month/day order', () => {
+    expect(
+      formatDateInterval({
+        interval: 'day',
+        date: '2026-07-04',
+        short: false,
+      })
+    ).toBe('Sat, 07/04');
+  });
+
+  it('formats compact daily chart dates with the month first', () => {
+    expect(
+      formatDateInterval({
+        interval: 'day',
+        date: '2026-07-04',
+        short: true,
+      })
+    ).toBe('Jul 4');
   });
 });
