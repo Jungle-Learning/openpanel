@@ -10,6 +10,7 @@ import {
 import React from 'react';
 import { useReportChartContext } from '../context';
 import { PreviousDiffIndicator } from './previous-diff-indicator';
+import { getBreakdownTooltipTotal } from './report-chart-tooltip-utils';
 import { SerieIcon } from './serie-icon';
 import { SerieName } from './serie-name';
 import {
@@ -62,7 +63,7 @@ type Data = {
 export const ReportChartTooltip = createChartTooltip<Data, Context>(
   ({ context: { references }, data }) => {
     const {
-      report: { interval, unit },
+      report: { breakdowns, interval, unit },
     } = useReportChartContext();
     const formatDate = useFormatDateInterval({
       interval,
@@ -95,16 +96,28 @@ export const ReportChartTooltip = createChartTooltip<Data, Context>(
     const limit = 3;
     const visible = sorted.slice(0, limit);
     const hidden = sorted.slice(limit);
+    const breakdownTotal = getBreakdownTooltipTotal(
+      payloadItems,
+      breakdowns?.length ?? 0,
+    );
 
     return (
       <>
-        {visible.map((item, index) => (
+        {visible[0]?.date && (
+          <ChartTooltipHeader>
+            <div>{formatDate(visible[0].date)}</div>
+          </ChartTooltipHeader>
+        )}
+        {breakdownTotal !== null && (
+          <div className="flex items-center justify-between gap-8 border-border border-b pb-2">
+            <div className="text-muted-foreground">Total</div>
+            <div className="font-medium font-mono">
+              {number.formatWithUnit(breakdownTotal, unit)}
+            </div>
+          </div>
+        )}
+        {visible.map((item) => (
           <React.Fragment key={item.id}>
-            {index === 0 && item.date && (
-              <ChartTooltipHeader>
-                <div>{formatDate(item.date)}</div>
-              </ChartTooltipHeader>
-            )}
             <ChartTooltipItem color={item.color}>
               <div className="flex items-center gap-1">
                 <SerieIcon name={item.names} />

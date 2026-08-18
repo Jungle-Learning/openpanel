@@ -31,7 +31,6 @@ import {
   ChartClickMenu,
   type ChartClickMenuItem,
 } from '../common/chart-click-menu';
-import { ChartTotal } from '../common/chart-total';
 import { ReportChartTooltip } from '../common/report-chart-tooltip';
 import { ReportTable } from '../common/report-table';
 import { SerieIcon } from '../common/serie-icon';
@@ -215,16 +214,9 @@ export function Chart({ data }: Props) {
   return (
     <ReportChartTooltip.TooltipProvider references={references.data}>
       <ChartClickMenu getMenuItems={getMenuItems}>
-        <div
-          className={cn(
-            'flex h-full w-full flex-col',
-            isEditMode && 'card p-4',
-          )}
-        >
-          <ChartTotal data={data} />
-          <div className="min-h-0 flex-1">
-            <ResponsiveContainer>
-              <ComposedChart data={rechartData}>
+        <div className={cn('h-full w-full', isEditMode && 'card p-4')}>
+          <ResponsiveContainer>
+            <ComposedChart data={rechartData}>
               <Customized component={calcStrokeDasharray} />
               <Line
                 dataKey="calcStrokeDasharray"
@@ -329,9 +321,8 @@ export function Chart({ data }: Props) {
                     );
                   })
                 : null}
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
+            </ComposedChart>
+          </ResponsiveContainer>
         </div>
         {isEditMode && (
           <ReportTable
