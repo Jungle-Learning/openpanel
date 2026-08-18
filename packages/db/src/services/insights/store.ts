@@ -1,4 +1,5 @@
-import { Prisma, db } from '../../prisma-client';
+import deepEqual from 'fast-deep-equal';
+import { db, Prisma } from '../../prisma-client';
 import type {
   Cadence,
   InsightStore,
@@ -112,16 +113,27 @@ export const insightStore: InsightStore = {
 
     let insight: any;
     if (existing) {
+      const enrichmentInputChanged =
+        existing.title !== baseData.title ||
+        existing.summary !== baseData.summary ||
+        existing.displayName !== baseData.displayName ||
+        existing.direction !== baseData.direction ||
+        existing.impactScore !== baseData.impactScore ||
+        existing.severityBand !== baseData.severityBand ||
+        !deepEqual(existing.payload, baseData.payload);
+
       // Update existing
       insight = await db.projectInsight.update({
         where: { id: existing.id },
         data: {
           ...baseData,
           threadId: existing.threadId, // Preserve threadId
-          // Materially-changed insights need re-enrichment; clearing enrichedAt
-          // re-queues them for the AI pass. Keep the old score/summary as a
-          // fallback until then (don't null those).
-          ...(decision.material ? { enrichedAt: null } : {}),
+          // Re-enrich whenever one of the model's inputs changes, even when the
+          // direction/severity materiality gate does not emit an insight event.
+          // Keep the old score/summary as a fallback until the worker replaces it.
+          ...(decision.material || enrichmentInputChanged
+            ? { enrichedAt: null }
+            : {}),
         },
       });
     } else {

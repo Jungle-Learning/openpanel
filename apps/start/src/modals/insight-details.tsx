@@ -1,6 +1,7 @@
 import { DeltaChip } from '@/components/delta-chip';
 import { ReportChart } from '@/components/report-chart';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/trpc/client';
@@ -186,6 +187,21 @@ export default function InsightDetails({ insight }: { insight: Insight }) {
 
         {mutation.isPending && (
           <p className="text-muted-foreground text-sm">Analyzing…</p>
+        )}
+
+        {mutation.isError && (
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-muted-foreground text-sm">
+              We couldn't generate an explanation. Please try again.
+            </p>
+            <Button
+              onClick={() => mutation.mutate({ insightId: insight.id })}
+              size="sm"
+              variant="outline"
+            >
+              Try again
+            </Button>
+          </div>
         )}
 
         {explanation && (

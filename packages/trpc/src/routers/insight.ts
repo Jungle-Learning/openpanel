@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { getProjectAccess } from '../access';
 import { TRPCAccessError } from '../errors';
 import { createTRPCRouter, protectedProcedure } from '../trpc';
+import { buildInsightSegmentFilters } from './insight-helpers';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // The explanation is a paid LLM call. Cache it keyed by the insight's
@@ -175,6 +176,8 @@ export const insightRouter = createTRPCRouter({
       const baseEnd = new Date(start.getTime());
       const baseStart = new Date(start.getTime() - spanMs);
       const iso = (d: Date) => d.toISOString();
+      const payload = insight.payload as InsightPayload | null;
+      const segmentFilters = buildInsightSegmentFilters(payload);
 
       const breakdowns = await Promise.all(
         EXPLAIN_COLUMNS.map(async (column) => {
@@ -184,12 +187,14 @@ export const insightRouter = createTRPCRouter({
               column,
               startDate: iso(start),
               endDate: iso(end),
+              filters: segmentFilters,
             }),
             getTrafficBreakdownCore({
               projectId: insight.projectId,
               column,
               startDate: iso(baseStart),
               endDate: iso(baseEnd),
+              filters: segmentFilters,
             }),
           ]);
           const compact = (rows: typeof cur) =>
@@ -205,7 +210,6 @@ export const insightRouter = createTRPCRouter({
       // shape of the change (a one-off spike vs sustained growth) instead of
       // only the current-vs-baseline totals. Best-effort: skip on page/entry
       // insights (events-table metrics) or anything we can't resolve.
-      const payload = insight.payload as InsightPayload | null;
       const segment = payload?.dimensions?.[0];
       const primaryMetric = payload?.primaryMetric ?? 'sessions';
       let dailySeries:
