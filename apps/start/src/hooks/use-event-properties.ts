@@ -24,13 +24,22 @@ export function useEventPropertyOptions(
   customEventIds: string[] = []
 ) {
   const trpc = useTRPC();
-  const needsCustomEvents = customEventIds.length > 0;
-  const customEventsQuery = useQuery(
-    trpc.event.customEvents.queryOptions(
-      { projectId },
-      { enabled: !!projectId && needsCustomEvents }
-    )
+  const needsProjectWideDiscovery = events === undefined;
+  const needsCustomEvents =
+    !needsProjectWideDiscovery && customEventIds.length > 0;
+  const customEventsOptions = trpc.event.customEvents.queryOptions(
+    { projectId },
+    { enabled: !!projectId && needsCustomEvents }
   );
+  // A newly selected ID may have been created since the project cache loaded.
+  // Include the selected IDs so that selection gets its own fresh lookup.
+  const customEventsQuery = useQuery({
+    ...customEventsOptions,
+    queryKey: [
+      ...customEventsOptions.queryKey,
+      { selectedIds: [...new Set(customEventIds)].sort() },
+    ],
+  });
   const customEvents = customEventsQuery.data ?? [];
   const unresolvedCustomEvents = customEventIds.some(
     (id) => !customEvents.some((event) => event.id === id)
@@ -38,7 +47,6 @@ export function useEventPropertyOptions(
   const customEventSourceNames = customEvents
     .filter((event) => customEventIds.includes(event.id))
     .flatMap((event) => event.eventNames);
-  const needsProjectWideDiscovery = events === undefined;
   // Explicit event scopes combine tracked names with resolved custom sources.
   // An undefined scope preserves All events / empty-report discovery.
   const sources = needsProjectWideDiscovery

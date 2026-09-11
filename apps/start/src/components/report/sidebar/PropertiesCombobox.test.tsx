@@ -53,18 +53,18 @@ vi.mock('@/integrations/trpc/react', () => ({
 }));
 
 function mount(
-  events = ['voice session ended'],
+  events: string[] | null = ['voice session ended'],
   customEventIds: string[] = []
 ) {
   const select = vi.fn();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  render(
+  const menu = (selectedCustomEventIds: string[]) => (
     <QueryClientProvider client={client}>
       <PropertiesCombobox
-        events={events}
-        customEventIds={customEventIds}
+        events={events ?? undefined}
+        customEventIds={selectedCustomEventIds}
         categories={['event']}
         onSelect={select}
       >
@@ -76,8 +76,13 @@ function mount(
       </PropertiesCombobox>
     </QueryClientProvider>
   );
+  const view = render(menu(customEventIds));
   fireEvent.click(screen.getByRole('button', { name: 'Select breakdown' }));
-  return { select, client };
+  return {
+    select,
+    client,
+    changeCustomEvents: (ids: string[]) => view.rerender(menu(ids)),
+  };
 }
 
 afterEach(cleanup);
@@ -194,6 +199,35 @@ describe('event property menu', () => {
     await waitFor(() =>
       expect(document.activeElement?.textContent).toBe('field099')
     );
+  });
+
+  it('does not resolve unused custom events for project-wide discovery', async () => {
+    propertyApiMock.fetch.mockResolvedValue(['properties.projectField']);
+    mount(null, ['deleted-custom']);
+    await screen.findByText('projectField');
+    expect(propertyApiMock.customEvents).not.toHaveBeenCalled();
+    expect(propertyApiMock.fetch).toHaveBeenCalledWith({
+      projectId: 'project',
+      event: undefined,
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Loading more properties…')).toBeNull();
+  });
+
+  it('refreshes custom sources when selecting an event created after the first lookup', async () => {
+    propertyApiMock.customEvents
+      .mockResolvedValueOnce([{ id: 'old-id', eventNames: ['old-source'] }])
+      .mockResolvedValueOnce([{ id: 'new-id', eventNames: ['new-source'] }]);
+    propertyApiMock.fetch.mockImplementation(async ({ event }) => [
+      `properties.${event}`,
+    ]);
+    const { changeCustomEvents } = mount([], ['old-id']);
+    await screen.findByText('old-source');
+    changeCustomEvents(['new-id']);
+    await screen.findByText('new-source');
+    expect(propertyApiMock.customEvents).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('old-source')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('distinguishes loading and failure from an empty list, and retries', async () => {
