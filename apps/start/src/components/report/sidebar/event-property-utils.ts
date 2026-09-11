@@ -1,6 +1,6 @@
 import type { IChartSeries } from '@openpanel/validation';
 
-/** A wildcard (including one inside a custom event) needs project-wide fields. */
+/** Undefined requests project-wide fields; an empty array waits for custom-event resolution. */
 export function getReportPropertyEvents(
   series: IChartSeries
 ): string[] | undefined {
@@ -9,12 +9,15 @@ export function getReportPropertyEvents(
       ? (item.eventNames ?? [item.name])
       : []
   );
-  if (names.includes('*')) return undefined;
-  if (
-    names.length === 0 &&
-    !series.some((item) => item.type === 'event' && item.customEventId)
-  )
-    return undefined;
+  const includesAllEvents = names.includes('*');
+  const hasTrackedEventNames = names.length > 0;
+  const hasSavedCustomEvents = series.some(
+    (item) => item.type === 'event' && item.customEventId
+  );
+  // Empty reports can discover all fields, but saved custom events must first
+  // resolve their source names rather than falling back to a project-wide scan.
+  const isEmptyReport = !hasTrackedEventNames && !hasSavedCustomEvents;
+  if (includesAllEvents || isEmptyReport) return undefined;
   return [...new Set(names)].sort();
 }
 

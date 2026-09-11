@@ -35,17 +35,15 @@ export function useEventPropertyOptions(
   const unresolvedCustomEvents = customEventIds.some(
     (id) => !customEvents.some((event) => event.id === id)
   );
-  const sources =
-    events === undefined
-      ? [undefined]
-      : [
-          ...new Set([
-            ...events,
-            ...customEvents
-              .filter((event) => customEventIds.includes(event.id))
-              .flatMap((event) => event.eventNames),
-          ]),
-        ];
+  const customEventSourceNames = customEvents
+    .filter((event) => customEventIds.includes(event.id))
+    .flatMap((event) => event.eventNames);
+  const needsProjectWideDiscovery = events === undefined;
+  // Explicit event scopes combine tracked names with resolved custom sources.
+  // An undefined scope preserves All events / empty-report discovery.
+  const sources = needsProjectWideDiscovery
+    ? [undefined]
+    : [...new Set([...events, ...customEventSourceNames])];
   const queries = useQueries({
     queries: sources.map((event) =>
       trpc.chart.properties.queryOptions(
