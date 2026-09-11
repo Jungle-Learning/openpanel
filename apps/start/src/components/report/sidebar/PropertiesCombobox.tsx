@@ -9,7 +9,6 @@ import {
   TargetIcon,
   UserIcon,
 } from 'lucide-react';
-import VirtualList from 'rc-virtual-list';
 import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -50,6 +49,7 @@ type State = 'index' | Exclude<PropertiesComboboxCategory, 'cohort'>;
 interface PropertiesComboboxProps {
   event?: IChartEvent;
   events?: string[];
+  customEventIds?: string[];
   children: (setOpen: Dispatch<SetStateAction<boolean>>) => React.ReactNode;
   onSelect: (action: PropertiesComboboxAction) => void;
   exclude?: string[];
@@ -153,6 +153,7 @@ function SearchHeader({
 export function PropertiesCombobox({
   event,
   events,
+  customEventIds,
   children,
   onSelect,
   categories = DEFAULT_CATEGORIES,
@@ -164,7 +165,12 @@ export function PropertiesCombobox({
   const [open, setOpen] = useState(false);
   const propertyQuery = useEventPropertyOptions(
     projectId,
-    event ? (event.eventNames ?? [event.name]) : events
+    event
+      ? event.customEventId
+        ? []
+        : (event.eventNames ?? [event.name])
+      : events,
+    event?.customEventId ? [event.customEventId] : customEventIds
   );
   const { properties } = propertyQuery;
   const profileProperties = useProfileProperties(projectId, {
@@ -189,6 +195,10 @@ export function PropertiesCombobox({
 
   const [state, setState] = useState<State>(initialState);
   const [search, setSearch] = useState('');
+  const [visibleRows, setVisibleRows] = useState(100);
+  useEffect(() => {
+    setVisibleRows(100);
+  }, [search, state, open]);
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
 
   useEffect(() => {
@@ -375,6 +385,13 @@ export function PropertiesCombobox({
             </Button>
           </div>
         )}
+        {options.eventProperties &&
+          propertyQuery.isPending &&
+          filtered.length > 0 && (
+            <div className="p-2 text-xs text-muted-foreground" role="status">
+              Loading more properties…
+            </div>
+          )}
         {filtered.length === 0 ? (
           <div
             className="p-3 text-center text-sm text-muted-foreground"
@@ -387,19 +404,19 @@ export function PropertiesCombobox({
                 : 'No properties found'}
           </div>
         ) : (
-          <VirtualList
-            data={rows}
-            height={Math.min(300, Math.max(40, rows.length * 40 + 8))}
-            itemHeight={40}
-            itemKey="value"
-          >
-            {(action) =>
+          <div className="max-h-[300px] overflow-y-auto">
+            {rows.slice(0, visibleRows).map((action, index) =>
               'heading' in action ? (
-                <div className="px-2 pb-1 pt-3 text-xs font-semibold text-muted-foreground">
+                <div
+                  key={action.value}
+                  className="px-2 pb-1 pt-3 text-xs font-semibold text-muted-foreground"
+                >
                   {action.heading}
                 </div>
               ) : (
                 <DropdownMenuItem
+                  key={action.value}
+                  data-property-row={index}
                   className="col items-start cursor-pointer gap-px rounded-md p-2"
                   onSelect={() => handleSelect(action)}
                 >
@@ -414,8 +431,30 @@ export function PropertiesCombobox({
                     )}
                 </DropdownMenuItem>
               )
-            }
-          </VirtualList>
+            )}
+            {rows.length > visibleRows && (
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  const menu = event.target as HTMLElement;
+                  const container = menu.parentElement;
+                  setVisibleRows((count) => count + 100);
+                  requestAnimationFrame(() => {
+                    const next = Array.from(
+                      container?.querySelectorAll<HTMLElement>(
+                        '[data-property-row]'
+                      ) ?? []
+                    ).find(
+                      (item) => Number(item.dataset.propertyRow) >= visibleRows
+                    );
+                    next?.focus();
+                  });
+                }}
+              >
+                Show more properties ({rows.length - visibleRows})
+              </DropdownMenuItem>
+            )}
+          </div>
         )}
       </div>
     );

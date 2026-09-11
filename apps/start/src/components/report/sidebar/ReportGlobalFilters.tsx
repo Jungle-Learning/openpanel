@@ -4,7 +4,10 @@ import { FilterIcon, type LucideIcon } from 'lucide-react';
 
 import { addGlobalFilter } from '../reportSlice';
 import { PropertiesCombobox } from './PropertiesCombobox';
-import { getReportPropertyEvents } from './event-property-utils';
+import {
+  getReportPropertyEvents,
+  getReportPropertyCustomEventIds,
+} from './event-property-utils';
 import { GlobalFilterItem } from './filters/GlobalFilterItem';
 
 export function ReportGlobalFilters() {
@@ -12,6 +15,7 @@ export function ReportGlobalFilters() {
   const dispatch = useDispatch();
   const series = useSelector((state) => state.report.series);
   const propertyEvents = getReportPropertyEvents(series);
+  const customEventIds = getReportPropertyCustomEventIds(series);
 
   return (
     <div>
@@ -23,6 +27,7 @@ export function ReportGlobalFilters() {
         <div className="flex gap-2 p-2">
           <PropertiesCombobox
             events={propertyEvents}
+            customEventIds={customEventIds}
             categories={['event', 'profile', 'group', 'cohort', 'session']}
             onSelect={(action) => {
               const isCohortAction = action.value === 'cohort';

@@ -7,7 +7,10 @@ import type { IChartBreakdown } from '@openpanel/validation';
 import { Button } from '@/components/ui/button';
 import { addBreakdown, changeBreakdown, removeBreakdown } from '../reportSlice';
 import { PropertiesCombobox } from './PropertiesCombobox';
-import { getReportPropertyEvents } from './event-property-utils';
+import {
+  getReportPropertyEvents,
+  getReportPropertyCustomEventIds,
+} from './event-property-utils';
 import { ReportBreakdownMore } from './ReportBreakdownMore';
 import type { ReportEventMoreProps } from './ReportEventMore';
 
@@ -16,6 +19,7 @@ export function ReportBreakdowns() {
   const dispatch = useDispatch();
   const series = useSelector((state) => state.report.series);
   const propertyEvents = getReportPropertyEvents(series);
+  const customEventIds = getReportPropertyCustomEventIds(series);
 
   const handleMore = (breakdown: IChartBreakdown) => {
     const callback: ReportEventMoreProps['onClick'] = (action) => {
@@ -40,6 +44,7 @@ export function ReportBreakdowns() {
                 <ColorSquare>{index}</ColorSquare>
                 <PropertiesCombobox
                   events={propertyEvents}
+                  customEventIds={customEventIds}
                   categories={['event', 'profile', 'group', 'cohort']}
                   onSelect={(action) => {
                     dispatch(
@@ -74,6 +79,7 @@ export function ReportBreakdowns() {
 
         <PropertiesCombobox
           events={propertyEvents}
+          customEventIds={customEventIds}
           categories={['event', 'profile', 'group', 'cohort']}
           onSelect={(action) => {
             dispatch(

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getEventPropertySection,
   getReportPropertyEvents,
+  getReportPropertyCustomEventIds,
 } from './event-property-utils';
 
 const event = (name: string) => ({
@@ -29,6 +30,16 @@ describe('report property event scope', () => {
     ] as IChartSeries;
     expect(getReportPropertyEvents(series)).toEqual(['a', 'b', 'c']);
   });
+  it('separates saved custom-event IDs from tracked source names', () => {
+    const series = [
+      { ...event('Display label'), customEventId: 'saved-id' },
+      event('normal'),
+    ];
+    expect(getReportPropertyEvents(series)).toEqual(['normal']);
+    expect(getReportPropertyCustomEventIds(series)).toEqual(['saved-id']);
+    expect(getReportPropertyEvents([series[0]!])).toEqual([]);
+  });
+
   it('keeps project-wide discovery for All events or an empty report', () => {
     expect(
       getReportPropertyEvents([event('*'), event('voice session ended')])

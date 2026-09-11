@@ -18,21 +18,55 @@ export function useEventProperties(
 }
 
 /** Reuse the same event-scoped cache entries as individual event filters. */
-export function useEventPropertyOptions(projectId: string, events?: string[]) {
+export function useEventPropertyOptions(
+  projectId: string,
+  events?: string[],
+  customEventIds: string[] = []
+) {
   const trpc = useTRPC();
+  const needsCustomEvents = customEventIds.length > 0;
+  const customEventsQuery = useQuery(
+    trpc.event.customEvents.queryOptions(
+      { projectId },
+      { enabled: !!projectId && needsCustomEvents }
+    )
+  );
+  const customEvents = customEventsQuery.data ?? [];
+  const unresolvedCustomEvents = customEventIds.some(
+    (id) => !customEvents.some((event) => event.id === id)
+  );
+  const sources =
+    events === undefined
+      ? [undefined]
+      : [
+          ...new Set([
+            ...events,
+            ...customEvents
+              .filter((event) => customEventIds.includes(event.id))
+              .flatMap((event) => event.eventNames),
+          ]),
+        ];
   const queries = useQueries({
-    queries: (events?.length ? events : [undefined]).map((event) =>
+    queries: sources.map((event) =>
       trpc.chart.properties.queryOptions(
         { projectId, event },
         { enabled: !!projectId }
       )
     ),
   });
+  const isResolvingCustomEvents =
+    needsCustomEvents && customEventsQuery.isPending;
+  const hasCustomEventError =
+    needsCustomEvents &&
+    (customEventsQuery.isError ||
+      (customEventsQuery.isSuccess && unresolvedCustomEvents));
   return {
     properties: [...new Set(queries.flatMap((query) => query.data ?? []))],
-    isPending: queries.some((query) => query.isPending),
-    isError: queries.some((query) => query.isError),
+    isPending:
+      isResolvingCustomEvents || queries.some((query) => query.isPending),
+    isError: hasCustomEventError || queries.some((query) => query.isError),
     retry: () => {
+      if (needsCustomEvents) void customEventsQuery.refetch();
       for (const query of queries) void query.refetch();
     },
   };
