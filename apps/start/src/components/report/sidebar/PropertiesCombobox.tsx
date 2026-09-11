@@ -22,15 +22,20 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { useAppParams } from '@/hooks/use-app-params';
-import { useEventProperties } from '@/hooks/use-event-properties';
+import { useEventPropertyOptions } from '@/hooks/use-event-properties';
 import { useProfileProperties } from '@/hooks/use-profile-properties';
 import { useTRPC } from '@/integrations/trpc/react';
+import {
+  EVENT_PROPERTY_SECTIONS,
+  getEventPropertySection,
+} from './event-property-utils';
 import { getProfilePropertyNames } from './profile-property-utils';
 
 export type PropertiesComboboxAction = {
   value: string;
   label: string;
   description: string;
+  section?: string;
 };
 
 export type PropertiesComboboxCategory =
@@ -44,6 +49,7 @@ type State = 'index' | Exclude<PropertiesComboboxCategory, 'cohort'>;
 
 interface PropertiesComboboxProps {
   event?: IChartEvent;
+  events?: string[];
   children: (setOpen: Dispatch<SetStateAction<boolean>>) => React.ReactNode;
   onSelect: (action: PropertiesComboboxAction) => void;
   exclude?: string[];
@@ -112,13 +118,31 @@ function SearchHeader({
   return (
     <div className="row items-center gap-1">
       {!!onBack && (
-        <Button onClick={onBack} size="icon" variant="ghost">
+        <Button
+          aria-label="Back to property categories"
+          onClick={onBack}
+          size="icon"
+          variant="ghost"
+        >
           <ArrowLeftIcon className="size-4" />
         </Button>
       )}
       <Input
         autoFocus
         onChange={(e) => onSearch(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget
+              .closest('[role="menu"]')
+              ?.querySelector<HTMLElement>('[role="menuitem"]')
+              ?.focus();
+          } else if (e.key.length === 1) {
+            // Typing belongs to search, not the menu's typeahead navigation.
+            e.stopPropagation();
+          }
+        }}
         placeholder="Search"
         value={value}
       />
@@ -128,6 +152,7 @@ function SearchHeader({
 
 export function PropertiesCombobox({
   event,
+  events,
   children,
   onSelect,
   categories = DEFAULT_CATEGORIES,
@@ -137,18 +162,19 @@ export function PropertiesCombobox({
   const { projectId } = useAppParams();
   const trpc = useTRPC();
   const [open, setOpen] = useState(false);
-  const properties = useEventProperties({
-    event: event?.name,
+  const propertyQuery = useEventPropertyOptions(
     projectId,
-  });
+    event ? (event.eventNames ?? [event.name]) : events
+  );
+  const { properties } = propertyQuery;
   const profileProperties = useProfileProperties(projectId, {
     enabled: categories.includes('profile'),
   });
   const groupPropertiesQuery = useQuery(
     trpc.group.properties.queryOptions(
       { projectId },
-      { enabled: categories.includes('group') },
-    ),
+      { enabled: categories.includes('group') }
+    )
   );
 
   /**
@@ -180,7 +206,9 @@ export function PropertiesCombobox({
   };
 
   const shouldShowProperty = (property: string) => {
-    return !exclude.some((pattern) => matchesPropertyPattern(property, pattern));
+    return !exclude.some((pattern) =>
+      matchesPropertyPattern(property, pattern)
+    );
   };
 
   const allProperties = Array.from(new Set([...properties, ...include]));
@@ -215,9 +243,16 @@ export function PropertiesCombobox({
       value: property,
       label: property.split('.').pop() ?? property,
       description: property.split('.').slice(0, -1).join('.'),
-    }));
+      section: getEventPropertySection(property, profileProperties),
+    }))
+    .sort(
+      (a, b) =>
+        EVENT_PROPERTY_SECTIONS.indexOf(a.section) -
+          EVENT_PROPERTY_SECTIONS.indexOf(b.section) ||
+        a.value.localeCompare(b.value)
+    );
   const sessionActions = SESSION_ACTIONS.filter((a) =>
-    shouldShowProperty(a.value),
+    shouldShowProperty(a.value)
   );
 
   const handleStateChange = (newState: State) => {
@@ -305,13 +340,24 @@ export function PropertiesCombobox({
 
   const renderActionList = (
     actions: PropertiesComboboxAction[],
-    options: { itemKey?: string } = {},
+    options: { eventProperties?: boolean } = {}
   ) => {
     const filtered = actions.filter(
       (action) =>
         action.label.toLowerCase().includes(search.toLowerCase()) ||
-        action.description.toLowerCase().includes(search.toLowerCase()),
+        action.description.toLowerCase().includes(search.toLowerCase())
     );
+
+    type Row = { value: string; heading: string } | PropertiesComboboxAction;
+    const rows: Row[] = [];
+    let section: string | undefined;
+    for (const action of filtered) {
+      if (action.section && action.section !== section) {
+        section = action.section;
+        rows.push({ value: `heading:${section}`, heading: section });
+      }
+      rows.push(action);
+    }
 
     return (
       <div className="col">
@@ -321,30 +367,54 @@ export function PropertiesCombobox({
           value={search}
         />
         <DropdownMenuSeparator />
+        {options.eventProperties && propertyQuery.isError && (
+          <div className="p-2 text-sm" role="alert">
+            Some properties could not be loaded.
+            <Button variant="ghost" size="sm" onClick={propertyQuery.retry}>
+              Retry
+            </Button>
+          </div>
+        )}
         {filtered.length === 0 ? (
-          <div className="p-3 text-center text-sm text-muted-foreground">
-            No properties found
+          <div
+            className="p-3 text-center text-sm text-muted-foreground"
+            role="status"
+          >
+            {options.eventProperties && propertyQuery.isPending
+              ? 'Loading properties…'
+              : options.eventProperties && propertyQuery.isError
+                ? 'Retry to load event properties.'
+                : 'No properties found'}
           </div>
         ) : (
           <VirtualList
-            data={filtered}
-            height={Math.min(300, Math.max(40, filtered.length * 40 + 8))}
+            data={rows}
+            height={Math.min(300, Math.max(40, rows.length * 40 + 8))}
             itemHeight={40}
-            itemKey={options.itemKey ?? 'value'}
+            itemKey="value"
           >
-            {(action) => (
-              <motion.div
-                animate={{ opacity: 1, y: 0 }}
-                className="col cursor-pointer gap-px rounded-md p-2 hover:bg-accent"
-                initial={{ opacity: 0, y: 10 }}
-                onClick={() => handleSelect(action)}
-              >
-                <div className="font-medium">{action.label}</div>
-                <div className="text-muted-foreground text-sm">
-                  {action.description}
+            {(action) =>
+              'heading' in action ? (
+                <div className="px-2 pb-1 pt-3 text-xs font-semibold text-muted-foreground">
+                  {action.heading}
                 </div>
-              </motion.div>
-            )}
+              ) : (
+                <DropdownMenuItem
+                  className="col items-start cursor-pointer gap-px rounded-md p-2"
+                  onSelect={() => handleSelect(action)}
+                >
+                  <div className="font-medium [overflow-wrap:anywhere]">
+                    {action.label}
+                  </div>
+                  {action.description &&
+                    action.description !== 'properties' && (
+                      <div className="text-muted-foreground text-sm [overflow-wrap:anywhere]">
+                        {action.description}
+                      </div>
+                    )}
+                </DropdownMenuItem>
+              )
+            }
           </VirtualList>
         )}
       </div>
@@ -380,7 +450,7 @@ export function PropertiesCombobox({
               key="event"
               transition={{ duration: 0.05 }}
             >
-              {renderActionList(eventActions)}
+              {renderActionList(eventActions, { eventProperties: true })}
             </motion.div>
           )}
           {state === 'profile' && (

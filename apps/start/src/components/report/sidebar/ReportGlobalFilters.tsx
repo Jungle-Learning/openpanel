@@ -4,11 +4,14 @@ import { FilterIcon, type LucideIcon } from 'lucide-react';
 
 import { addGlobalFilter } from '../reportSlice';
 import { PropertiesCombobox } from './PropertiesCombobox';
+import { getReportPropertyEvents } from './event-property-utils';
 import { GlobalFilterItem } from './filters/GlobalFilterItem';
 
 export function ReportGlobalFilters() {
   const globalFilters = useSelector((state) => state.report.globalFilters);
   const dispatch = useDispatch();
+  const series = useSelector((state) => state.report.series);
+  const propertyEvents = getReportPropertyEvents(series);
 
   return (
     <div>
@@ -19,6 +22,7 @@ export function ReportGlobalFilters() {
       <div className="rounded-lg border bg-def-100">
         <div className="flex gap-2 p-2">
           <PropertiesCombobox
+            events={propertyEvents}
             categories={['event', 'profile', 'group', 'cohort', 'session']}
             onSelect={(action) => {
               const isCohortAction = action.value === 'cohort';
@@ -26,7 +30,7 @@ export function ReportGlobalFilters() {
                 isCohortAction &&
                 globalFilters.some(
                   (f) =>
-                    f.operator === 'inCohort' || f.operator === 'notInCohort',
+                    f.operator === 'inCohort' || f.operator === 'notInCohort'
                 )
               ) {
                 return;
@@ -47,16 +51,13 @@ export function ReportGlobalFilters() {
                         operator: 'is',
                         value: [],
                         type: 'string',
-                      },
-                ),
+                      }
+                )
               );
             }}
           >
             {(setOpen) => (
-              <SmallButton
-                onClick={() => setOpen((p) => !p)}
-                icon={FilterIcon}
-              >
+              <SmallButton onClick={() => setOpen((p) => !p)} icon={FilterIcon}>
                 Add filter
               </SmallButton>
             )}
