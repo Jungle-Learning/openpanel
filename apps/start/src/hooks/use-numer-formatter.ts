@@ -38,7 +38,7 @@ export const formatCurrency =
     options?: {
       currency?: string;
       short?: boolean;
-    },
+    }
   ) => {
     const short = options?.short ?? false;
     const currency = options?.currency ?? 'USD';
@@ -91,7 +91,7 @@ export function useNumber() {
     },
     formatWithUnit: (
       value: number | null | undefined,
-      unit?: string | null,
+      unit?: string | null
     ) => {
       if (isNil(value)) {
         return 'N/A';
@@ -103,6 +103,30 @@ export function useNumber() {
         return `${format(round(value * 100, 1))}${unit ? ` ${unit}` : ''}`;
       }
       return `${format(value)}${unit ? ` ${unit}` : ''}`;
+    },
+  };
+}
+
+// Tooltip precision is based on the displayed magnitude (including percentages).
+export function formatTooltipNumber(value: number | null | undefined) {
+  if (isNil(value)) return 'N/A';
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: Math.abs(value) < 10 ? 2 : 0,
+  }).format(value);
+}
+
+export function useTooltipNumber() {
+  return {
+    format: formatTooltipNumber,
+    formatWithUnit: (
+      value: number | null | undefined,
+      unit?: string | null
+    ) => {
+      if (isNil(value)) return 'N/A';
+      if (unit === 'min') return fancyMinutes(value);
+      const displayValue = unit === '%' ? value * 100 : value;
+      return `${formatTooltipNumber(displayValue)}${unit ? ` ${unit}` : ''}`;
     },
   };
 }

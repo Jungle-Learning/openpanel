@@ -22,14 +22,14 @@ import {
   parseChartDate,
   useFormatDateInterval,
 } from '@/hooks/use-format-date-interval';
-import { useNumber } from '@/hooks/use-numer-formatter';
+import { useTooltipNumber } from '@/hooks/use-numer-formatter';
 import type { IRechartPayloadItem } from '@/hooks/use-rechart-data-model';
 import type { RouterOutputs } from '@/trpc/client';
 
 const getMatchingReferences = (
   interval: IInterval,
   references: RouterOutputs['reference']['getChartReferences'],
-  date: Date,
+  date: Date
 ) => {
   return references.filter((reference) => {
     if (interval === 'minute') {
@@ -69,7 +69,7 @@ export const ReportChartTooltip = createChartTooltip<Data, Context>(
       interval,
       short: false,
     });
-    const number = useNumber();
+    const number = useTooltipNumber();
 
     if (!data || data.length === 0) {
       return null;
@@ -79,15 +79,14 @@ export const ReportChartTooltip = createChartTooltip<Data, Context>(
     const matchingReferences = getMatchingReferences(
       interval,
       references ?? [],
-      parseChartDate(firstItem.date),
+      parseChartDate(firstItem.date)
     );
 
     // Get all payload items from the first data point
     const payloadItems = Object.keys(firstItem)
       .filter((key) => key.endsWith(':payload'))
       .map(
-        (key) =>
-          firstItem[key as keyof typeof firstItem] as IRechartPayloadItem,
+        (key) => firstItem[key as keyof typeof firstItem] as IRechartPayloadItem
       )
       .filter((item) => item && typeof item === 'object' && 'id' in item);
 
@@ -98,7 +97,7 @@ export const ReportChartTooltip = createChartTooltip<Data, Context>(
     const hidden = sorted.slice(limit);
     const breakdownTotal = getBreakdownTooltipTotal(
       payloadItems,
-      breakdowns?.length ?? 0,
+      breakdowns?.length ?? 0
     );
 
     return (
@@ -132,7 +131,7 @@ export const ReportChartTooltip = createChartTooltip<Data, Context>(
                     </span>
                   )}
                 </div>
-                <PreviousDiffIndicator {...item.previous} />
+                <PreviousDiffIndicator tooltipPrecision {...item.previous} />
               </div>
             </ChartTooltipItem>
           </React.Fragment>
@@ -160,5 +159,5 @@ export const ReportChartTooltip = createChartTooltip<Data, Context>(
         )}
       </>
     );
-  },
+  }
 );

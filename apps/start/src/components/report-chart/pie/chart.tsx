@@ -13,7 +13,7 @@ import {
   ChartTooltipHeader,
   ChartTooltipItem,
 } from '@/components/charts/chart-tooltip';
-import { useNumber } from '@/hooks/use-numer-formatter';
+import { useTooltipNumber } from '@/hooks/use-numer-formatter';
 import { parseChartDate } from '@/hooks/use-format-date-interval';
 import { formatDate } from '@/utils/date';
 import { AXIS_FONT_PROPS } from '../common/axis';
@@ -32,7 +32,7 @@ interface Props {
 }
 
 const PieTooltip = (props: { payload?: any[] }) => {
-  const number = useNumber();
+  const number = useTooltipNumber();
   return (
     <ChartTooltipContainer>
       {props.payload?.map((serie, index) => {
@@ -58,7 +58,10 @@ const PieTooltip = (props: { payload?: any[] }) => {
                     </span>
                   )}
                 </div>
-                <PreviousDiffIndicator {...item.previous?.sum} />
+                <PreviousDiffIndicator
+                  tooltipPrecision
+                  {...item.previous?.sum}
+                />
               </div>
             </ChartTooltipItem>
           </Fragment>
@@ -78,20 +81,22 @@ export function Chart({ data }: Props) {
     () => ({
       ...data,
       series: data.series.filter((serie) =>
-        hasBreakdownValue(serie.names, breakdowns.length),
+        hasBreakdownValue(serie.names, breakdowns.length)
       ),
     }),
-    [data, breakdowns.length],
+    [data, breakdowns.length]
   );
-  const { series, setVisibleSeries } = useVisibleSeries(dataWithBreakdownValues, {
-    savedVisibleSeries,
-    onVisibleSeriesChange: isEditMode
-      ? (ids) => dispatch(changeVisibleSeries(ids))
-      : undefined,
-  });
+  const { series, setVisibleSeries } = useVisibleSeries(
+    dataWithBreakdownValues,
+    {
+      savedVisibleSeries,
+      onVisibleSeriesChange: isEditMode
+        ? (ids) => dispatch(changeVisibleSeries(ids))
+        : undefined,
+    }
+  );
 
-  const sum =
-    series.reduce((acc, serie) => acc + serie.metrics.sum, 0) || 1;
+  const sum = series.reduce((acc, serie) => acc + serie.metrics.sum, 0) || 1;
   const pieData = series.map((serie) => ({
     id: serie.id,
     color: getChartColor(serie.index),
@@ -108,7 +113,7 @@ export function Chart({ data }: Props) {
       <div
         className={cn(
           'flex h-full w-full flex-col max-sm:-mx-3',
-          isEditMode && 'card p-4',
+          isEditMode && 'card p-4'
         )}
       >
         <div className="min-h-0 flex-1">

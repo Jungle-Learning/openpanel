@@ -24,8 +24,8 @@ vi.mock('@/integrations/trpc/react', () => ({
   useTRPC: () => ({
     event: {
       customEvents: {
-        queryOptions: (_input: unknown, options: object) => ({
-          queryKey: ['customEvents'],
+        queryOptions: (input: unknown, options: object) => ({
+          queryKey: ['customEvents', input],
           queryFn: () => propertyApiMock.customEvents(),
           ...options,
         }),

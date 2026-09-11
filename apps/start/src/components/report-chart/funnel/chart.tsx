@@ -23,7 +23,7 @@ import { ColorSquare } from '@/components/color-square';
 import { Button } from '@/components/ui/button';
 import { Tooltiper } from '@/components/ui/tooltip';
 import { WidgetTable } from '@/components/widget-table';
-import { useNumber } from '@/hooks/use-numer-formatter';
+import { useNumber, useTooltipNumber } from '@/hooks/use-numer-formatter';
 import { pushModal } from '@/modals';
 import type { RouterOutputs } from '@/trpc/client';
 import { cn } from '@/utils/cn';
@@ -469,7 +469,9 @@ export function Chart({
     return (
       <div className="mt-4 -mb-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs">
         {visibleBreakdowns.map((breakdown, idx) => {
-          const stableIndex = data.current.findIndex((b) => b.id === breakdown.id);
+          const stableIndex = data.current.findIndex(
+            (b) => b.id === breakdown.id
+          );
           const colorIndex = stableIndex >= 0 ? stableIndex : idx;
           return (
             <div
@@ -568,7 +570,7 @@ export function Chart({
             {hasBreakdowns &&
               visibleBreakdowns.map((item, breakdownIndex) => {
                 const stableIndex = data.current.findIndex(
-                  (b) => b.id === item.id,
+                  (b) => b.id === item.id
                 );
                 const colorIndex =
                   stableIndex >= 0 ? stableIndex : breakdownIndex;
@@ -630,7 +632,7 @@ const { Tooltip, TooltipProvider } = createChartTooltip<
   }
 >(({ data: dataArray, context, ...props }) => {
   const data = dataArray[0];
-  const number = useNumber();
+  const number = useTooltipNumber();
   if (!data) {
     return null;
   }
@@ -696,7 +698,11 @@ const { Tooltip, TooltipProvider } = createChartTooltip<
                     ? 'Decline'
                     : 'No change'}
               </span>
-              <PreviousDiffIndicatorPure {...metric} size="xs" />
+              <PreviousDiffIndicatorPure
+                tooltipPrecision
+                {...metric}
+                size="xs"
+              />
             </div>
           )}
         </div>
@@ -747,6 +753,7 @@ const { Tooltip, TooltipProvider } = createChartTooltip<
                 </div>
 
                 <PreviousDiffIndicatorPure
+                  tooltipPrecision
                   {...getPreviousMetric(
                     variant.step.percent,
                     prevVariant?.step.percent
