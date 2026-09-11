@@ -1,7 +1,4 @@
 import { ColorSquare } from '@/components/color-square';
-import { Combobox } from '@/components/ui/combobox';
-import { useAppParams } from '@/hooks/use-app-params';
-import { useEventProperties } from '@/hooks/use-event-properties';
 import { useDispatch, useSelector } from '@/redux';
 import { ChevronsUpDownIcon, SplitIcon } from 'lucide-react';
 
@@ -10,12 +7,19 @@ import type { IChartBreakdown } from '@openpanel/validation';
 import { Button } from '@/components/ui/button';
 import { addBreakdown, changeBreakdown, removeBreakdown } from '../reportSlice';
 import { PropertiesCombobox } from './PropertiesCombobox';
+import {
+  getReportPropertyEvents,
+  getReportPropertyCustomEventIds,
+} from './event-property-utils';
 import { ReportBreakdownMore } from './ReportBreakdownMore';
 import type { ReportEventMoreProps } from './ReportEventMore';
 
 export function ReportBreakdowns() {
   const selectedBreakdowns = useSelector((state) => state.report.breakdowns);
   const dispatch = useDispatch();
+  const series = useSelector((state) => state.report.series);
+  const propertyEvents = getReportPropertyEvents(series);
+  const customEventIds = getReportPropertyCustomEventIds(series);
 
   const handleMore = (breakdown: IChartBreakdown) => {
     const callback: ReportEventMoreProps['onClick'] = (action) => {
@@ -39,13 +43,15 @@ export function ReportBreakdowns() {
               <div className="flex items-center gap-2 p-2 px-4">
                 <ColorSquare>{index}</ColorSquare>
                 <PropertiesCombobox
+                  events={propertyEvents}
+                  customEventIds={customEventIds}
                   categories={['event', 'profile', 'group', 'cohort']}
                   onSelect={(action) => {
                     dispatch(
                       changeBreakdown({
                         ...item,
                         name: action.value,
-                      }),
+                      })
                     );
                   }}
                 >
@@ -72,12 +78,14 @@ export function ReportBreakdowns() {
         })}
 
         <PropertiesCombobox
+          events={propertyEvents}
+          customEventIds={customEventIds}
           categories={['event', 'profile', 'group', 'cohort']}
           onSelect={(action) => {
             dispatch(
               addBreakdown({
                 name: action.value,
-              }),
+              })
             );
           }}
         >
