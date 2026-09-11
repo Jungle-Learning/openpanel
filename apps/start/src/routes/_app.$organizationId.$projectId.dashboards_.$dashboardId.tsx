@@ -1,4 +1,8 @@
 import { FullPageEmptyState } from '@/components/full-page-empty-state';
+import {
+  DashboardTimePreferences,
+  dashboardTimeStorageKey,
+} from '@/components/dashboard/dashboard-time-preferences';
 import { DashboardTimeControls } from '@/components/dashboard/dashboard-time-controls';
 import { useDashboardOptions } from '@/components/dashboard/use-dashboard-options';
 import { Button, LinkButton } from '@/components/ui/button';
@@ -44,7 +48,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 export const Route = createFileRoute(
   '/_app/$organizationId/$projectId/dashboards_/$dashboardId',
 )({
-  component: Component,
+  component: DashboardWithTimePreferences,
   head: () => {
     return {
       meta: [
@@ -82,6 +86,23 @@ export const Route = createFileRoute(
   },
   pendingComponent: FullPageLoadingState,
 });
+
+function DashboardWithTimePreferences() {
+  const { organizationId, projectId, dashboardId } = Route.useParams();
+  const { session } = Route.useRouteContext();
+  if (!session?.userId) return <Component />;
+  const storageKey = dashboardTimeStorageKey(
+    session.userId,
+    organizationId,
+    projectId,
+    dashboardId
+  );
+  return (
+    <DashboardTimePreferences key={storageKey} storageKey={storageKey}>
+      <Component />
+    </DashboardTimePreferences>
+  );
+}
 
 function Component() {
   const router = useRouter();
