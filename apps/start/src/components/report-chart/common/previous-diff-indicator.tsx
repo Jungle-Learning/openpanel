@@ -1,4 +1,4 @@
-import { useNumber } from '@/hooks/use-numer-formatter';
+import { formatTooltipNumber, useNumber } from '@/hooks/use-numer-formatter';
 import { cn } from '@/utils/cn';
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 
@@ -10,7 +10,7 @@ export function getDiffIndicator<A, B, C>(
   state: string | undefined | null,
   positive: A,
   negative: B,
-  neutral: C,
+  neutral: C
 ): A | B | C {
   if (state === 'neutral' || !state) {
     return neutral;
@@ -25,6 +25,7 @@ export function getDiffIndicator<A, B, C>(
 // TODO: Fix this mess!
 
 interface PreviousDiffIndicatorProps {
+  tooltipPrecision?: boolean;
   diff?: number | null | undefined;
   state?: string | null | undefined;
   children?: React.ReactNode;
@@ -35,6 +36,7 @@ interface PreviousDiffIndicatorProps {
 
 export function PreviousDiffIndicator({
   diff,
+  tooltipPrecision = false,
   state,
   inverted,
   size = 'sm',
@@ -49,7 +51,7 @@ export function PreviousDiffIndicator({
     state,
     'bg-emerald-300',
     'bg-rose-300',
-    undefined,
+    undefined
   );
   const number = useNumber();
 
@@ -73,7 +75,7 @@ export function PreviousDiffIndicator({
         className={cn(
           'flex items-center gap-1 font-mono font-medium',
           size === 'lg' && 'gap-2',
-          className,
+          className
         )}
       >
         <div
@@ -81,12 +83,12 @@ export function PreviousDiffIndicator({
             'flex size-4 items-center justify-center rounded-full',
             variant,
             size === 'lg' && 'size-8',
-            size === 'md' && 'size-6',
+            size === 'md' && 'size-6'
           )}
         >
           {renderIcon()}
         </div>
-        {number.format(diff)}%
+        {tooltipPrecision ? formatTooltipNumber(diff) : number.format(diff)}%
       </div>
       {children}
     </>
@@ -94,6 +96,7 @@ export function PreviousDiffIndicator({
 }
 
 interface PreviousDiffIndicatorPureProps {
+  tooltipPrecision?: boolean;
   diff?: number | null | undefined;
   state?: string | null | undefined;
   inverted?: boolean;
@@ -104,6 +107,7 @@ interface PreviousDiffIndicatorPureProps {
 
 export function PreviousDiffIndicatorPure({
   diff,
+  tooltipPrecision = false,
   state,
   inverted,
   size = 'sm',
@@ -115,7 +119,7 @@ export function PreviousDiffIndicatorPure({
     state,
     'bg-emerald-300',
     'bg-rose-300',
-    undefined,
+    undefined
   );
 
   if (diff === null || diff === undefined || !showPrevious) {
@@ -138,7 +142,7 @@ export function PreviousDiffIndicatorPure({
       size={size}
       inverted={inverted}
     >
-      {diff.toFixed(1)}%
+      {tooltipPrecision ? formatTooltipNumber(diff) : diff.toFixed(1)}%
     </DeltaChip>
   );
 

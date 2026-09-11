@@ -3,8 +3,7 @@ import {
   ChartTooltipHeader,
   ChartTooltipItem,
 } from '@/components/charts/chart-tooltip';
-import { useNumber } from '@/hooks/use-numer-formatter';
-import { round } from '@/utils/math';
+import { useTooltipNumber } from '@/hooks/use-numer-formatter';
 import { ResponsiveSankey } from '@nivo/sankey';
 import {
   type ReactNode,
@@ -86,11 +85,11 @@ function SankeyPortalTooltip({
 
     left = Math.min(
       Math.max(padding, left),
-      Math.max(padding, vw - rect.width - padding),
+      Math.max(padding, vw - rect.width - padding)
     );
     top = Math.min(
       Math.max(padding, top),
-      Math.max(padding, vh - rect.height - padding),
+      Math.max(padding, vh - rect.height - padding)
     );
 
     setPos({ left, top, ready: true });
@@ -116,7 +115,7 @@ function SankeyPortalTooltip({
           >
             {children}
           </div>,
-          document.body,
+          document.body
         )}
     </>
   );
@@ -135,7 +134,7 @@ type SankeyData = {
 };
 
 export function Chart({ data }: { data: SankeyData }) {
-  const number = useNumber();
+  const number = useTooltipNumber();
   const containerRef = useRef<HTMLDivElement>(null);
   const { appTheme } = useTheme();
 
@@ -219,7 +218,7 @@ export function Chart({ data }: { data: SankeyData }) {
                     </div>
                     <div className="flex items-center justify-between gap-8 font-mono font-medium">
                       <div className="text-muted-foreground">Share</div>
-                      <div>{number.format(round(pct, 1))} %</div>
+                      <div>{number.format(pct)} %</div>
                     </div>
                   </ChartTooltipItem>
                 </ChartTooltipContainer>
@@ -278,11 +277,11 @@ export function Chart({ data }: { data: SankeyData }) {
                     </div>
                     <div className="flex items-center justify-between gap-8 font-mono text-sm">
                       <div className="text-muted-foreground">% of total</div>
-                      <div>{number.format(round(pctOfTotal, 1))} %</div>
+                      <div>{number.format(pctOfTotal)} %</div>
                     </div>
                     <div className="flex items-center justify-between gap-8 font-mono text-sm">
                       <div className="text-muted-foreground">% of source</div>
-                      <div>{number.format(round(pctOfSource, 1))} %</div>
+                      <div>{number.format(pctOfSource)} %</div>
                     </div>
                   </ChartTooltipItem>
                 </ChartTooltipContainer>

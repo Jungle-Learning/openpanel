@@ -23,7 +23,7 @@ import {
 } from '@/components/charts/chart-tooltip';
 import { useConversionRechartDataModel } from '@/hooks/use-conversion-rechart-data-model';
 import { useFormatDateInterval } from '@/hooks/use-format-date-interval';
-import { useNumber } from '@/hooks/use-numer-formatter';
+import { useNumber, useTooltipNumber } from '@/hooks/use-numer-formatter';
 import { useVisibleConversionSeries } from '@/hooks/use-visible-conversion-series';
 import { useTRPC } from '@/integrations/trpc/react';
 import { average, getPreviousMetric, round } from '@openpanel/common';
@@ -70,20 +70,20 @@ export function Chart({ data }: Props) {
       startDate,
       endDate,
       range,
-    }),
+    })
   );
 
   const xAxisProps = useXAxisProps({ interval, hide: hideXAxis });
   const number = useNumber();
-  
+
   // Calculate dynamic Y-axis domain based on max rate
   const yAxisDomain = useMemo(() => {
     if (!series.length) return [0, 100];
-    
+
     const maxRate = Math.max(
       ...series.flatMap((serie) => serie.data.map((item) => item.rate))
     );
-    
+
     if (maxRate <= 5) return [0, 10];
     if (maxRate <= 20) return [0, 30];
     if (maxRate <= 50) return [0, 60];
@@ -100,7 +100,7 @@ export function Chart({ data }: Props) {
   const averageConversionRate = average(
     series.map((serie) => {
       return average(serie.data.map((item) => item.rate));
-    }, 0),
+    }, 0)
   );
 
   // Show dots when we have 30 or fewer data points
@@ -200,7 +200,9 @@ export function Chart({ data }: Props) {
                   type={lineType}
                   isAnimationActive={false}
                   strokeWidth={2}
-                  dot={showDots ? { r: 3, strokeWidth: 2, fill: 'white' } : false}
+                  dot={
+                    showDots ? { r: 3, strokeWidth: 2, fill: 'white' } : false
+                  }
                   activeDot={showDots ? { r: 5, strokeWidth: 2 } : { r: 4 }}
                 />
               );
@@ -253,7 +255,7 @@ const { Tooltip, TooltipProvider } = createChartTooltip<
     interval: context.interval,
     short: false,
   });
-  const number = useNumber();
+  const number = useTooltipNumber();
 
   return (
     <>
@@ -267,7 +269,7 @@ const { Tooltip, TooltipProvider } = createChartTooltip<
         }
 
         const prevSerie = context.conversion?.previous?.find(
-          (p) => p.id === serie.id,
+          (p) => p.id === serie.id
         );
         const prevItem = prevSerie?.data.find((d) => d.date === date);
         const previousMetric = getPreviousMetric(rate, previousRate);
@@ -299,7 +301,9 @@ const { Tooltip, TooltipProvider } = createChartTooltip<
               <div className="flex justify-between gap-8 font-mono font-medium">
                 <div className="row gap-1">
                   <span>{number.formatWithUnit(rate / 100, '%')}</span>
-                  <span className="text-muted-foreground">({total})</span>
+                  <span className="text-muted-foreground">
+                    ({number.format(total)})
+                  </span>
                   {prevItem && previousRate !== undefined && (
                     <span className="text-muted-foreground">
                       ({number.formatWithUnit(previousRate / 100, '%')})
@@ -307,7 +311,7 @@ const { Tooltip, TooltipProvider } = createChartTooltip<
                   )}
                 </div>
                 {previousRate !== undefined && (
-                  <PreviousDiffIndicator {...previousMetric} />
+                  <PreviousDiffIndicator tooltipPrecision {...previousMetric} />
                 )}
               </div>
             </ChartTooltipItem>

@@ -1,4 +1,4 @@
-import { useNumber } from '@/hooks/use-numer-formatter';
+import { useTooltipNumber } from '@/hooks/use-numer-formatter';
 import type { RouterOutputs } from '@/trpc/client';
 import { useReportChartContext } from '../context';
 
@@ -12,7 +12,7 @@ export function RetentionTooltip({ active, payload }: Props) {
   const {
     report: { interval },
   } = useReportChartContext();
-  const number = useNumber();
+  const number = useTooltipNumber();
   if (!active) {
     return null;
   }
