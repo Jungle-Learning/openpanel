@@ -185,6 +185,23 @@ describe('dashboard time preferences', () => {
     });
   });
 
+  it.each([
+    '?overrideInterval=hour',
+    '?range=unknown&overrideInterval=hour',
+  ])('keeps the saved period when only a valid scale is linked: %s', async (search) => {
+    localStorage.setItem(key, JSON.stringify(saved));
+    mount(key, search);
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem(key)!)).toEqual({
+        ...saved,
+        overrideInterval: 'hour',
+      })
+    );
+    expect(screen.getByTestId('selection').textContent).toContain(
+      '"range":"30d"'
+    );
+  });
+
   it('clears conflicting custom dates when a relative period is linked', async () => {
     mount(key, '?range=7d&start=2026-01-01&end=2026-06-01');
     await waitFor(() =>

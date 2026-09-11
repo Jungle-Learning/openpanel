@@ -85,7 +85,7 @@ function linkedDashboardTime(params: URLSearchParams): TimeSelection | null {
     range: range === 'custom' && !dates ? null : range,
     overrideInterval,
   };
-  return Object.values(linked).some((value) => value !== null) ? linked : null;
+  return linked.range || (linked.start && linked.end) ? linked : null;
 }
 
 /** Mounted once per authenticated dashboard, keyed by user/project/dashboard.
@@ -118,6 +118,20 @@ export function DashboardTimePreferences({
         } catch {
           // Storage may be blocked; the dashboard remains fully usable.
         }
+      }
+      const linkedInterval = timeParsers.overrideInterval.parse(
+        params.get('overrideInterval') ?? ''
+      );
+      if (
+        initialSelection &&
+        linkedInterval &&
+        (initialSelection.range ||
+          (initialSelection.start && initialSelection.end))
+      ) {
+        initialSelection = {
+          ...initialSelection,
+          overrideInterval: linkedInterval,
+        };
       }
       initialSelection ??= {
         start: null,
