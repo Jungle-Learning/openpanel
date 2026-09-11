@@ -155,6 +155,21 @@ describe('dashboard time preferences', () => {
     );
   });
 
+  it.each([
+    '?range=unknown',
+    '?range=custom&start=invalid&end=2026-09-11',
+    '?overrideInterval=unknown',
+  ])('does not erase a saved view when a linked time selection is malformed: %s', async (search) => {
+    localStorage.setItem(key, JSON.stringify(saved));
+    mount(key, search);
+    await waitFor(() =>
+      expect(screen.getByTestId('selection').textContent).toContain(
+        '"range":"30d"'
+      )
+    );
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual(saved);
+  });
+
   it('restores custom dates and tolerates disabled storage', async () => {
     localStorage.setItem(
       key,

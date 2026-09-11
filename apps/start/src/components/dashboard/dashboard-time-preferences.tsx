@@ -83,9 +83,16 @@ export function DashboardTimePreferences({
     if (!initialized.current) {
       initialized.current = true;
       const params = new URLSearchParams(window.location.search);
-      const hasExplicitTime = Object.keys(timeParsers).some((key) =>
-        params.has(key)
+      const linkedSelection = parseSavedDashboardTime(
+        JSON.stringify(
+          Object.fromEntries(
+            Object.keys(timeParsers).map((key) => [key, params.get(key)])
+          )
+        )
       );
+      const hasExplicitTime =
+        linkedSelection !== null &&
+        Object.values(linkedSelection).some((value) => value !== null);
       if (!hasExplicitTime) {
         let saved: TimeSelection | null = null;
         try {
