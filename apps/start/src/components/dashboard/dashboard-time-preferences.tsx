@@ -78,9 +78,10 @@ function linkedDashboardTime(params: URLSearchParams): TimeSelection | null {
       overrideInterval: null,
     })
   );
+  const useDates = range === null || range === 'custom';
   const linked: TimeSelection = {
-    start: dates?.start ?? null,
-    end: dates?.end ?? null,
+    start: useDates ? (dates?.start ?? null) : null,
+    end: useDates ? (dates?.end ?? null) : null,
     range: range === 'custom' && !dates ? null : range,
     overrideInterval,
   };

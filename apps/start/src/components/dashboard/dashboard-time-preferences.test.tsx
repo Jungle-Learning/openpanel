@@ -185,6 +185,21 @@ describe('dashboard time preferences', () => {
     });
   });
 
+  it('clears conflicting custom dates when a relative period is linked', async () => {
+    mount(key, '?range=7d&start=2026-01-01&end=2026-06-01');
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem(key)!)).toEqual({
+        start: null,
+        end: null,
+        range: '7d',
+        overrideInterval: null,
+      })
+    );
+    expect(screen.getByTestId('selection').textContent).toContain(
+      '"range":"7d"'
+    );
+  });
+
   it('validates picker dates without native parsing of space-separated timestamps', () => {
     const NativeDate = Date;
     vi.stubGlobal(
