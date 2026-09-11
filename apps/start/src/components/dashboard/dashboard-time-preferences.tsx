@@ -1,3 +1,4 @@
+import { parseISO } from 'date-fns';
 import { intervals, timeWindows } from '@openpanel/constants';
 import { mapKeys } from '@openpanel/validation';
 import { parseAsString, parseAsStringEnum, useQueryStates } from 'nuqs';
@@ -51,8 +52,8 @@ export function parseSavedDashboardTime(
     const hasDates = parsed.start !== null || parsed.end !== null;
     if (hasDates || parsed.range === 'custom') {
       if (!parsed.start || !parsed.end) return null;
-      const start = new Date(parsed.start).getTime();
-      const end = new Date(parsed.end).getTime();
+      const start = parseISO(parsed.start.replace(' ', 'T')).getTime();
+      const end = parseISO(parsed.end.replace(' ', 'T')).getTime();
       if (!Number.isFinite(start) || !Number.isFinite(end) || start > end)
         return null;
     }
@@ -60,6 +61,30 @@ export function parseSavedDashboardTime(
   } catch {
     return null;
   }
+}
+
+function linkedDashboardTime(params: URLSearchParams): TimeSelection | null {
+  // Validate independent controls independently: a malformed scale must not
+  // discard an explicitly linked, valid period. Date bounds form one control.
+  const range = timeParsers.range.parse(params.get('range') ?? '');
+  const overrideInterval = timeParsers.overrideInterval.parse(
+    params.get('overrideInterval') ?? ''
+  );
+  const dates = parseSavedDashboardTime(
+    JSON.stringify({
+      start: params.get('start'),
+      end: params.get('end'),
+      range: 'custom',
+      overrideInterval: null,
+    })
+  );
+  const linked: TimeSelection = {
+    start: dates?.start ?? null,
+    end: dates?.end ?? null,
+    range: range === 'custom' && !dates ? null : range,
+    overrideInterval,
+  };
+  return Object.values(linked).some((value) => value !== null) ? linked : null;
 }
 
 /** Mounted once per authenticated dashboard, keyed by user/project/dashboard.
@@ -83,33 +108,31 @@ export function DashboardTimePreferences({
     if (!initialized.current) {
       initialized.current = true;
       const params = new URLSearchParams(window.location.search);
-      const linkedSelection = parseSavedDashboardTime(
-        JSON.stringify(
-          Object.fromEntries(
-            Object.keys(timeParsers).map((key) => [key, params.get(key)])
-          )
-        )
-      );
-      const hasExplicitTime =
-        linkedSelection !== null &&
-        Object.values(linkedSelection).some((value) => value !== null);
-      if (!hasExplicitTime) {
-        let saved: TimeSelection | null = null;
+      let initialSelection = linkedDashboardTime(params);
+      if (!initialSelection) {
         try {
-          saved = parseSavedDashboardTime(
+          initialSelection = parseSavedDashboardTime(
             window.localStorage.getItem(storageKey)
           );
         } catch {
           // Storage may be blocked; the dashboard remains fully usable.
         }
-        if (saved && JSON.stringify(saved) !== serialized) {
-          restoring.current = JSON.stringify(saved);
-          void setSelection(saved, { history: 'replace' }).catch(() => {
+      }
+      initialSelection ??= {
+        start: null,
+        end: null,
+        range: null,
+        overrideInterval: null,
+      };
+      if (JSON.stringify(initialSelection) !== serialized) {
+        restoring.current = JSON.stringify(initialSelection);
+        void setSelection(initialSelection, { history: 'replace' }).catch(
+          () => {
             restoring.current = null;
             setReady(true);
-          });
-          return;
-        }
+          }
+        );
+        return;
       }
     }
     // Wait for nuqs' restored state before saving, so defaults cannot overwrite

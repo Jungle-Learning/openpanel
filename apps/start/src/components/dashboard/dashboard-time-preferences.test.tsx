@@ -170,6 +170,48 @@ describe('dashboard time preferences', () => {
     expect(JSON.parse(localStorage.getItem(key)!)).toEqual(saved);
   });
 
+  it('honors a valid linked period even when its interval is invalid', async () => {
+    localStorage.setItem(key, JSON.stringify(saved));
+    mount(key, '?range=7d&overrideInterval=unknown');
+    await waitFor(() =>
+      expect(screen.getByTestId('selection').textContent).toContain(
+        '"range":"7d"'
+      )
+    );
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual({
+      ...saved,
+      range: '7d',
+      overrideInterval: null,
+    });
+  });
+
+  it('validates picker dates without native parsing of space-separated timestamps', () => {
+    const NativeDate = Date;
+    vi.stubGlobal(
+      'Date',
+      class extends NativeDate {
+        constructor(value?: string | number) {
+          super(
+            typeof value === 'string' && value.includes(' ')
+              ? Number.NaN
+              : (value ?? NativeDate.now())
+          );
+        }
+      }
+    );
+    try {
+      const custom = {
+        ...saved,
+        range: 'custom',
+        start: '2026-09-01 00:00:00',
+        end: '2026-09-10 23:59:59',
+      };
+      expect(parseSavedDashboardTime(JSON.stringify(custom))).toEqual(custom);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('restores custom dates and tolerates disabled storage', async () => {
     localStorage.setItem(
       key,
