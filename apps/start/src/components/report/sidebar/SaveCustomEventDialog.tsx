@@ -39,6 +39,7 @@ export function SaveCustomEventDialog({
     trpc.event.createCustomEvent.mutationOptions({
       onSuccess() {
         queryClient.invalidateQueries(trpc.chart.events.pathFilter());
+        queryClient.invalidateQueries(trpc.event.customEvents.pathFilter());
         toast('Custom event created', {
           description: `${name.trim()} is now available in the event picker.`,
         });

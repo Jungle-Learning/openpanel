@@ -182,6 +182,7 @@ const middlewareMarker = 'middlewareMarker' as 'middlewareMarker' & {
 
 export const cacheMiddleware = (
   cbOrTtl: number | ((input: any, opts: { path: string }) => number),
+  keySuffix?: (rawInput: unknown, ctx: unknown) => Promise<string>,
 ) =>
   t.middleware(async ({ ctx, next, path, type, getRawInput, input }) => {
     const ttl =
@@ -196,6 +197,9 @@ export const cacheMiddleware = (
     let key = `trpc:${path}:`;
     if (rawInput) {
       key += JSON.stringify(rawInput).replace(/\"/g, "'");
+    }
+    if (keySuffix) {
+      key += await keySuffix(rawInput, ctx);
     }
     const cache = await getRedisCache().getJson(key);
     if (cache && process.env.NODE_ENV === 'production') {

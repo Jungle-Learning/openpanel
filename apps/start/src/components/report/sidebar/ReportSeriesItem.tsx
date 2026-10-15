@@ -1,7 +1,11 @@
 import { shortId } from '@openpanel/common';
 import { alphabetIds } from '@openpanel/constants';
 import type { IChartEvent, IChartEventItem } from '@openpanel/validation';
-import { DatabaseIcon, FilterIcon, type LucideIcon } from 'lucide-react';
+import { DatabaseIcon, FilterIcon, InfoIcon, type LucideIcon } from 'lucide-react';
+import { CustomEventDialog } from '@/components/events/custom-event-dialog';
+import { CustomEventBadge } from '@/components/events/custom-event-definition';
+import { Button } from '@/components/ui/button';
+import { useAppParams } from '@/hooks/use-app-params';
 import { ReportSegment } from '../ReportSegment';
 import { changeEvent } from '../reportSlice';
 import { FiltersList } from './filters/FiltersList';
@@ -29,6 +33,7 @@ export function ReportSeriesItem({
   ...props
 }: ReportSeriesItemProps) {
   const dispatch = useDispatch();
+  const { projectId } = useAppParams();
 
   // Normalize event to have type field
   const normalizedEvent: IChartEventItem =
@@ -54,6 +59,14 @@ export function ReportSeriesItem({
       </div>
 
       {/* Segment and Filter buttons - only for events */}
+      {chartEvent?.customEventId && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2">
+          <CustomEventBadge />
+          <CustomEventDialog customEventId={chartEvent.customEventId} projectId={projectId}>
+            <Button icon={InfoIcon} size="sm" variant="outline">View definition</Button>
+          </CustomEventDialog>
+        </div>
+      )}
       {chartEvent && !isCustomEvent && (showSegment || showAddFilter) && (
         <div className="flex gap-2 p-2 pt-0">
           {showSegment && (

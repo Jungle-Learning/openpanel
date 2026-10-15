@@ -217,6 +217,12 @@ export function ReportSeries() {
           <div className="flex flex-col gap-4">
             {selectedSeries.map((event, index) => {
               const isFormula = event.type === 'formula';
+              const selectedCustomEvent =
+                event.type === 'event' && event.customEventId
+                  ? eventNames.find(
+                      (item) => item.customEventId === event.customEventId,
+                    )
+                  : undefined;
               const profileSetResolution = isFormula
                 ? resolveProfileSetFormula({
                     formula: event.formula,
@@ -398,7 +404,7 @@ export function ReportSeries() {
                                   type: 'event';
                                 },
                               )
-                            : (
+                            : selectedCustomEvent?.name ?? (
                                 event as IChartEventItem & {
                                   type: 'event';
                                 }

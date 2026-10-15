@@ -44,6 +44,7 @@ import sqlstring from 'sqlstring';
 import { z } from 'zod';
 import { getProjectAccess } from '../access';
 import { TRPCAccessError } from '../errors';
+import { getCustomEventCacheKey } from './custom-event-cache';
 import {
   cacheMiddleware,
   createTRPCRouter,
@@ -51,7 +52,9 @@ import {
   publicProcedure,
 } from '../trpc';
 
-const cacher = cacheMiddleware(60);
+const cacher = cacheMiddleware(60, (input, ctx) =>
+  getCustomEventCacheKey((ctx as { report?: unknown }).report ?? input),
+);
 
 const chartProcedure = publicProcedure.use(
   async ({ ctx, next, getRawInput }) => {

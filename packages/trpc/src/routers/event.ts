@@ -1,7 +1,6 @@
 import {
   ch,
   chQuery,
-  clix,
   convertClickhouseDateToJs,
   db,
   eventService,
@@ -18,7 +17,6 @@ import {
 } from '@openpanel/db';
 import {
   zChartEventFilter,
-  zCreateCustomEvent,
   zRange,
   zTimeInterval,
 } from '@openpanel/validation';
@@ -27,93 +25,12 @@ import { clone } from 'ramda';
 import sqlstring from 'sqlstring';
 import { z } from 'zod';
 import { getProjectAccess } from '../access';
-import { TRPCAccessError, TRPCBadRequestError } from '../errors';
+import { TRPCAccessError } from '../errors';
+import { customEventProcedures } from './custom-event';
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '../trpc';
 
 export const eventRouter = createTRPCRouter({
-  customEvents: protectedProcedure
-    .input(z.object({ projectId: z.string() }))
-    .query(async ({ input, ctx }) => {
-      const access = await getProjectAccess({
-        projectId: input.projectId,
-        userId: ctx.session.userId,
-      });
-      if (!access) {
-        throw TRPCAccessError('You do not have access to this project');
-      }
-
-      return db.customEvent.findMany({
-        where: { projectId: input.projectId },
-        orderBy: { name: 'asc' },
-      });
-    }),
-
-  createCustomEvent: protectedProcedure
-    .input(zCreateCustomEvent)
-    .mutation(async ({ input, ctx }) => {
-      const access = await getProjectAccess({
-        projectId: input.projectId,
-        userId: ctx.session.userId,
-      });
-      if (!access) {
-        throw TRPCAccessError('You do not have access to this project');
-      }
-
-      const existingCustomEvent = await db.customEvent.findUnique({
-        where: {
-          name_projectId: {
-            name: input.name,
-            projectId: input.projectId,
-          },
-        },
-      });
-      if (existingCustomEvent) {
-        throw TRPCBadRequestError(
-          `A custom event named “${input.name}” already exists`,
-        );
-      }
-
-      const sourceEventNames = await clix(ch)
-        .select<{ name: string }>(['DISTINCT name'])
-        .from(TABLE_NAMES.event_names_mv)
-        .where('project_id', '=', input.projectId)
-        .where('name', 'IN', input.eventNames)
-        .execute();
-      const existingSourceNames = new Set(
-        sourceEventNames.map((event) => event.name),
-      );
-      const missingSourceNames = input.eventNames.filter(
-        (eventName) => !existingSourceNames.has(eventName),
-      );
-      if (missingSourceNames.length > 0) {
-        throw TRPCBadRequestError(
-          `Source event${missingSourceNames.length === 1 ? '' : 's'} not found: ${missingSourceNames.join(', ')}`,
-        );
-      }
-
-      const trackedEventWithSameName = await clix(ch)
-        .select<{ name: string }>(['name'])
-        .from(TABLE_NAMES.event_names_mv)
-        .where('project_id', '=', input.projectId)
-        .where('name', '=', input.name)
-        .limit(1)
-        .execute();
-      if (trackedEventWithSameName.length > 0 || input.name === '*') {
-        throw TRPCBadRequestError(
-          `“${input.name}” is already used by a tracked event`,
-        );
-      }
-
-      return db.customEvent.create({
-        data: {
-          projectId: input.projectId,
-          name: input.name,
-          description: input.description || null,
-          operation: input.operation,
-          eventNames: input.eventNames,
-        },
-      });
-    }),
+  ...customEventProcedures,
 
   updateEventMeta: protectedProcedure
     .input(
