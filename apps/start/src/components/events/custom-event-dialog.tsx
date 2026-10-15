@@ -172,6 +172,8 @@ function CustomEventEditor({
   const [description, setDescription] = useState(event.description ?? '');
   const [operation, setOperation] = useState(event.operation);
   const [eventNames, setEventNames] = useState(event.eventNames);
+  // A background refresh must not advance the revision of an existing draft.
+  const [draftRevision] = useState(event.updatedAt);
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const sources = useQuery(
@@ -202,6 +204,13 @@ function CustomEventEditor({
   const available = (sources.data ?? []).filter(
     (source) => source.name !== '*' && !eventNames.includes(source.name)
   );
+  // Only allow additions when the picker has sources and the draft has room.
+  const cannotAddSource =
+    sources.isPending ||
+    sources.isError ||
+    eventNames.length >= 10 ||
+    available.length === 0 ||
+    mutation.isPending;
 
   return (
     <>
@@ -216,7 +225,7 @@ function CustomEventEditor({
           mutation.mutate({
             id: event.id,
             projectId: event.projectId,
-            updatedAt: event.updatedAt,
+            updatedAt: draftRevision,
             name: name.trim(),
             description: description.trim(),
             operation,
@@ -329,13 +338,7 @@ function CustomEventEditor({
             <div className="mt-3">
               <ComboboxEvents
                 className="w-full"
-                disabled={
-                  sources.isPending ||
-                  sources.isError ||
-                  eventNames.length >= 10 ||
-                  available.length === 0 ||
-                  mutation.isPending
-                }
+                disabled={cannotAddSource}
                 items={available}
                 onChange={(source) =>
                   setEventNames((current) =>
