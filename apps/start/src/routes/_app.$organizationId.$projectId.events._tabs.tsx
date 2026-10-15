@@ -28,10 +28,10 @@ function Component() {
     { id: 'events', label: 'Events' },
     { id: 'conversions', label: 'Conversions' },
     { id: 'stats', label: 'Stats' },
+    { id: 'custom', label: 'Custom events' },
   ]);
 
   const handleTabChange = (tabId: string) => {
-    console.log('tabId', tabId, tabs[0].id === tabId);
     router.navigate({
       from: Route.fullPath,
       to: tabId,
@@ -42,7 +42,7 @@ function Component() {
     <div className="container p-8">
       <PageHeader
         title="Events"
-        description="Paginate through your events, conversions and overall stats"
+        description="Explore tracked activity and manage reusable event definitions"
       />
 
       <Tabs

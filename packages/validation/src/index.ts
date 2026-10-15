@@ -160,6 +160,11 @@ export const zCreateCustomEvent = z.object({
 });
 export type ICreateCustomEvent = z.infer<typeof zCreateCustomEvent>;
 
+export const zUpdateCustomEvent = zCreateCustomEvent.extend({
+  id: z.uuid(),
+  updatedAt: z.date(),
+});
+
 // Event with type field for discriminated union
 export const zChartEventWithType = zChartEvent.extend({
   type: z.literal('event'),

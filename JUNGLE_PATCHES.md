@@ -17,6 +17,9 @@ upstream PRs when a patch is generally useful.
   arithmetic to aggregate values. The report builder provides guided formula
   templates, preserves legacy `A | B` reports as true unions, and can save a
   union/intersection as a reusable query-time custom event.
+  Saved definitions can be reviewed and edited from report metrics or the
+  Events → Custom events library. Updates retain the event ID, detect concurrent
+  edits, and change chart cache keys so reports use the latest definition.
 
 ## Patch discipline
 
