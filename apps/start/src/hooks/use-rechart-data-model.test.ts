@@ -10,8 +10,8 @@ function series(
     id,
     names: [id],
     event: { name: id },
-    metrics: { sum: 0, average: 0, min: 0, max: 0 },
-    data: values.map(([date, count]) => ({ date, count })),
+    metrics: { sum: 0, average: 0, min: 0, max: 0, count: undefined },
+    data: values.map(([date, count]) => ({ date, count, previous: undefined })),
   };
 }
 
