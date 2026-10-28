@@ -1,0 +1,1967 @@
+{
+  "dataset": "isolated synthetic, 1,200,027 events; 40,002 group versions",
+  "repeats": 5,
+  "results": [
+    {
+      "experiment": "01 Scope group CTE to project",
+      "result_equal": true,
+      "qualification": "Already implemented; retain tenant scope",
+      "control": {
+        "wall_ms": 19.736535999982152,
+        "server_ms": 17.706427,
+        "rows_read": 1240028,
+        "bytes_read": 21989883
+      },
+      "candidate": {
+        "wall_ms": 16.306821999933163,
+        "server_ms": 14.360121,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "control_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "candidate_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "control_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL) g ON g.id=gid AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "candidate_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "control_settings": {},
+      "candidate_settings": {},
+      "speedup": 1.2330277022039022
+    },
+    {
+      "experiment": "02 Restrict group CTE to matched group IDs",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 18.240101999936087,
+        "server_ms": 15.796252,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "candidate": {
+        "wall_ms": 16.587633999961326,
+        "server_ms": 14.352536,
+        "rows_read": 55,
+        "bytes_read": 2253
+      },
+      "control_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "candidate_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "control_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "candidate_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench' AND id IN (SELECT arrayJoin(groups) FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot')) g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "control_settings": {},
+      "candidate_settings": {},
+      "speedup": 1.1005896100870258
+    },
+    {
+      "experiment": "03 Hash join versus parallel hash",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 14.682062000019869,
+        "server_ms": 12.856748,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "candidate": {
+        "wall_ms": 17.306438999980855,
+        "server_ms": 15.669684,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "control_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "candidate_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "control_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "candidate_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "control_settings": {
+        "join_algorithm": "hash"
+      },
+      "candidate_settings": {
+        "join_algorithm": "parallel_hash"
+      },
+      "speedup": 0.8204854673521176
+    },
+    {
+      "experiment": "04 Hash join versus full sorting merge",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 16.108460999930685,
+        "server_ms": 14.203135,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "candidate": {
+        "wall_ms": 19.89053700003751,
+        "server_ms": 17.66047,
+        "rows_read": 49180,
+        "bytes_read": 2741466
+      },
+      "control_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "candidate_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "control_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "candidate_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "control_settings": {
+        "join_algorithm": "hash"
+      },
+      "candidate_settings": {
+        "join_algorithm": "full_sorting_merge"
+      },
+      "speedup": 0.8042331262984507
+    },
+    {
+      "experiment": "05 Explicit PREWHERE on sparse snapshot event",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 16.857681000033153,
+        "server_ms": 14.755474,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "candidate": {
+        "wall_ms": 15.726038999900993,
+        "server_ms": 13.63368,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "control_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "candidate_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "control_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "candidate_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid PREWHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "control_settings": {},
+      "candidate_settings": {},
+      "speedup": 1.0822810862511074
+    },
+    {
+      "experiment": "06 Automatic PREWHERE for property filters",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 9.130481999932272,
+        "server_ms": 6.870262,
+        "rows_read": 27,
+        "bytes_read": 3747
+      },
+      "candidate": {
+        "wall_ms": 10.575913000025139,
+        "server_ms": 8.568327,
+        "rows_read": 27,
+        "bytes_read": 3747
+      },
+      "control_data": [
+        {
+          "v": 27
+        }
+      ],
+      "candidate_data": [
+        {
+          "v": 27
+        }
+      ],
+      "control_sql": "SELECT count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot' AND toFloat64OrNull(properties['snapshotSchemaVersion'])=2",
+      "candidate_sql": "SELECT count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot' AND toFloat64OrNull(properties['snapshotSchemaVersion'])=2",
+      "control_settings": {
+        "optimize_move_to_prewhere": "0"
+      },
+      "candidate_settings": {
+        "optimize_move_to_prewhere": "1"
+      },
+      "speedup": 0.8018207054889479
+    },
+    {
+      "experiment": "07 Sparse snapshot max threads 1",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 18.092610000053355,
+        "server_ms": 15.200868,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "candidate": {
+        "wall_ms": 19.705426999962583,
+        "server_ms": 17.86632,
+        "rows_read": 32796,
+        "bytes_read": 1828122
+      },
+      "control_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "candidate_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "control_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "candidate_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "control_settings": {},
+      "candidate_settings": {
+        "max_threads": "1"
+      },
+      "speedup": 0.8508113590263691
+    },
+    {
+      "experiment": "08 Sparse snapshot max threads 2",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 18.489839000039865,
+        "server_ms": 16.277324,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "candidate": {
+        "wall_ms": 18.85983700003635,
+        "server_ms": 16.821868,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "control_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "candidate_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "control_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "candidate_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "control_settings": {},
+      "candidate_settings": {
+        "max_threads": "2"
+      },
+      "speedup": 0.9676288031745346
+    },
+    {
+      "experiment": "09 Sparse snapshot max threads 4",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 17.650962999937292,
+        "server_ms": 15.373381,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "candidate": {
+        "wall_ms": 18.442486000026292,
+        "server_ms": 16.471099,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "control_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "candidate_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "control_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "candidate_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "control_settings": {},
+      "candidate_settings": {
+        "max_threads": "4"
+      },
+      "speedup": 0.9333549024263652
+    },
+    {
+      "experiment": "10 Broad timeseries max threads 1",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 19.695774000069832,
+        "server_ms": 16.936304999999997,
+        "rows_read": 303104,
+        "bytes_read": 5152768
+      },
+      "candidate": {
+        "wall_ms": 25.883448999934444,
+        "server_ms": 23.894599999999997,
+        "rows_read": 303104,
+        "bytes_read": 5152768
+      },
+      "control_data": [
+        {
+          "k": "2026-10-01",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-02",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-03",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-04",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-05",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-06",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-07",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-08",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-09",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-10",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-11",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-12",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-13",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-14",
+          "v": 19200
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "2026-10-01",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-02",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-03",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-04",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-05",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-06",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-07",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-08",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-09",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-10",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-11",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-12",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-13",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-14",
+          "v": 19200
+        }
+      ],
+      "control_sql": "SELECT toDate(created_at) k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "candidate_sql": "SELECT toDate(created_at) k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "control_settings": {},
+      "candidate_settings": {
+        "max_threads": "1"
+      },
+      "speedup": 0.7087921538757711
+    },
+    {
+      "experiment": "11 Broad timeseries max threads 2",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 25.062600000069324,
+        "server_ms": 21.398532000000003,
+        "rows_read": 303104,
+        "bytes_read": 5152768
+      },
+      "candidate": {
+        "wall_ms": 21.89892499995949,
+        "server_ms": 20.032263,
+        "rows_read": 303104,
+        "bytes_read": 5152768
+      },
+      "control_data": [
+        {
+          "k": "2026-10-01",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-02",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-03",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-04",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-05",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-06",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-07",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-08",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-09",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-10",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-11",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-12",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-13",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-14",
+          "v": 19200
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "2026-10-01",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-02",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-03",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-04",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-05",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-06",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-07",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-08",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-09",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-10",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-11",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-12",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-13",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-14",
+          "v": 19200
+        }
+      ],
+      "control_sql": "SELECT toDate(created_at) k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "candidate_sql": "SELECT toDate(created_at) k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "control_settings": {},
+      "candidate_settings": {
+        "max_threads": "2"
+      },
+      "speedup": 1.0682034276407015
+    },
+    {
+      "experiment": "12 Broad timeseries max threads 4",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 27.35992600003101,
+        "server_ms": 21.288203,
+        "rows_read": 303104,
+        "bytes_read": 5152768
+      },
+      "candidate": {
+        "wall_ms": 24.825943000109874,
+        "server_ms": 22.010466,
+        "rows_read": 303104,
+        "bytes_read": 5152768
+      },
+      "control_data": [
+        {
+          "k": "2026-10-01",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-02",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-03",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-04",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-05",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-06",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-07",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-08",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-09",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-10",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-11",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-12",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-13",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-14",
+          "v": 19200
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "2026-10-01",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-02",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-03",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-04",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-05",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-06",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-07",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-08",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-09",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-10",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-11",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-12",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-13",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-14",
+          "v": 19200
+        }
+      ],
+      "control_sql": "SELECT toDate(created_at) k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "candidate_sql": "SELECT toDate(created_at) k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "control_settings": {},
+      "candidate_settings": {
+        "max_threads": "4"
+      },
+      "speedup": 0.9671854744011326
+    },
+    {
+      "experiment": "13 Materialized platform versus map lookup",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 121.04453799997827,
+        "server_ms": 118.541539,
+        "rows_read": 1200000,
+        "bytes_read": 473960570
+      },
+      "candidate": {
+        "wall_ms": 22.352304000037293,
+        "server_ms": 19.844708999999998,
+        "rows_read": 303104,
+        "bytes_read": 5455872
+      },
+      "control_data": [
+        {
+          "k": "android",
+          "v": 100000
+        },
+        {
+          "k": "ios",
+          "v": 100000
+        },
+        {
+          "k": "web",
+          "v": 100000
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "android",
+          "v": 100000
+        },
+        {
+          "k": "ios",
+          "v": 100000
+        },
+        {
+          "k": "web",
+          "v": 100000
+        }
+      ],
+      "control_sql": "SELECT properties['platform'] k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "candidate_sql": "SELECT _property_platform k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "control_settings": {},
+      "candidate_settings": {},
+      "speedup": 5.973458164591882
+    },
+    {
+      "experiment": "14 Name projection for platform breakdown",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 17.605322999997952,
+        "server_ms": 14.52481,
+        "rows_read": 1200000,
+        "bytes_read": 21600000
+      },
+      "candidate": {
+        "wall_ms": 16.245089999983975,
+        "server_ms": 13.918878000000001,
+        "rows_read": 303104,
+        "bytes_read": 5455872
+      },
+      "control_data": [
+        {
+          "k": "android",
+          "v": 100000
+        },
+        {
+          "k": "ios",
+          "v": 100000
+        },
+        {
+          "k": "web",
+          "v": 100000
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "android",
+          "v": 100000
+        },
+        {
+          "k": "ios",
+          "v": 100000
+        },
+        {
+          "k": "web",
+          "v": 100000
+        }
+      ],
+      "control_sql": "SELECT _property_platform k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "candidate_sql": "SELECT _property_platform k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "control_settings": {
+        "optimize_use_projections": "0"
+      },
+      "candidate_settings": {
+        "optimize_use_projections": "1"
+      },
+      "speedup": 1.0435331066196571
+    },
+    {
+      "experiment": "15 Name projection for acquisition breakdown",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 25.843352000038067,
+        "server_ms": 21.119692,
+        "rows_read": 1200000,
+        "bytes_read": 21600000
+      },
+      "candidate": {
+        "wall_ms": 21.571881999989273,
+        "server_ms": 16.604373,
+        "rows_read": 303104,
+        "bytes_read": 5455872
+      },
+      "control_data": [
+        {
+          "k": "source0",
+          "v": 12000
+        },
+        {
+          "k": "source12",
+          "v": 12000
+        },
+        {
+          "k": "source16",
+          "v": 12000
+        },
+        {
+          "k": "source20",
+          "v": 12000
+        },
+        {
+          "k": "source24",
+          "v": 12000
+        },
+        {
+          "k": "source28",
+          "v": 12000
+        },
+        {
+          "k": "source32",
+          "v": 12000
+        },
+        {
+          "k": "source36",
+          "v": 12000
+        },
+        {
+          "k": "source4",
+          "v": 12000
+        },
+        {
+          "k": "source40",
+          "v": 12000
+        },
+        {
+          "k": "source44",
+          "v": 12000
+        },
+        {
+          "k": "source48",
+          "v": 12000
+        },
+        {
+          "k": "source52",
+          "v": 12000
+        },
+        {
+          "k": "source56",
+          "v": 12000
+        },
+        {
+          "k": "source60",
+          "v": 12000
+        },
+        {
+          "k": "source64",
+          "v": 12000
+        },
+        {
+          "k": "source68",
+          "v": 12000
+        },
+        {
+          "k": "source72",
+          "v": 12000
+        },
+        {
+          "k": "source76",
+          "v": 12000
+        },
+        {
+          "k": "source8",
+          "v": 12000
+        },
+        {
+          "k": "source80",
+          "v": 12000
+        },
+        {
+          "k": "source84",
+          "v": 12000
+        },
+        {
+          "k": "source88",
+          "v": 12000
+        },
+        {
+          "k": "source92",
+          "v": 12000
+        },
+        {
+          "k": "source96",
+          "v": 12000
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "source0",
+          "v": 12000
+        },
+        {
+          "k": "source12",
+          "v": 12000
+        },
+        {
+          "k": "source16",
+          "v": 12000
+        },
+        {
+          "k": "source20",
+          "v": 12000
+        },
+        {
+          "k": "source24",
+          "v": 12000
+        },
+        {
+          "k": "source28",
+          "v": 12000
+        },
+        {
+          "k": "source32",
+          "v": 12000
+        },
+        {
+          "k": "source36",
+          "v": 12000
+        },
+        {
+          "k": "source4",
+          "v": 12000
+        },
+        {
+          "k": "source40",
+          "v": 12000
+        },
+        {
+          "k": "source44",
+          "v": 12000
+        },
+        {
+          "k": "source48",
+          "v": 12000
+        },
+        {
+          "k": "source52",
+          "v": 12000
+        },
+        {
+          "k": "source56",
+          "v": 12000
+        },
+        {
+          "k": "source60",
+          "v": 12000
+        },
+        {
+          "k": "source64",
+          "v": 12000
+        },
+        {
+          "k": "source68",
+          "v": 12000
+        },
+        {
+          "k": "source72",
+          "v": 12000
+        },
+        {
+          "k": "source76",
+          "v": 12000
+        },
+        {
+          "k": "source8",
+          "v": 12000
+        },
+        {
+          "k": "source80",
+          "v": 12000
+        },
+        {
+          "k": "source84",
+          "v": 12000
+        },
+        {
+          "k": "source88",
+          "v": 12000
+        },
+        {
+          "k": "source92",
+          "v": 12000
+        },
+        {
+          "k": "source96",
+          "v": 12000
+        }
+      ],
+      "control_sql": "SELECT _property_exact_source_name k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "candidate_sql": "SELECT _property_exact_source_name k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "control_settings": {
+        "optimize_use_projections": "0"
+      },
+      "candidate_settings": {
+        "optimize_use_projections": "1"
+      },
+      "speedup": 1.2719355316819252
+    },
+    {
+      "experiment": "16 Reuse server result cache",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 18.822698999997556,
+        "server_ms": 16.302545000000002,
+        "rows_read": 303104,
+        "bytes_read": 5152768
+      },
+      "candidate": {
+        "wall_ms": 3.767713999991429,
+        "server_ms": 1.089194,
+        "rows_read": 14,
+        "bytes_read": 140
+      },
+      "control_data": [
+        {
+          "k": "2026-10-01",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-02",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-03",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-04",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-05",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-06",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-07",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-08",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-09",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-10",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-11",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-12",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-13",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-14",
+          "v": 19200
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "2026-10-01",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-02",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-03",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-04",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-05",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-06",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-07",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-08",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-09",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-10",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-11",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-12",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-13",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-14",
+          "v": 19200
+        }
+      ],
+      "control_sql": "SELECT toDate(created_at) k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "candidate_sql": "SELECT toDate(created_at) k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "control_settings": {
+        "use_query_cache": "0"
+      },
+      "candidate_settings": {
+        "use_query_cache": "1",
+        "query_cache_ttl": "60",
+        "query_cache_min_query_runs": "0",
+        "query_cache_min_query_duration": "0"
+      },
+      "speedup": 14.967531036711552
+    },
+    {
+      "experiment": "17 Explicit cheap PREWHERE before wide properties",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 112.65674700007366,
+        "server_ms": 108.16793700000001,
+        "rows_read": 1200000,
+        "bytes_read": 473960570
+      },
+      "candidate": {
+        "wall_ms": 115.44188300001679,
+        "server_ms": 109.999463,
+        "rows_read": 1200000,
+        "bytes_read": 473960570
+      },
+      "control_data": [
+        {
+          "k": "android",
+          "v": 100000
+        },
+        {
+          "k": "ios",
+          "v": 100000
+        },
+        {
+          "k": "web",
+          "v": 100000
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "android",
+          "v": 100000
+        },
+        {
+          "k": "ios",
+          "v": 100000
+        },
+        {
+          "k": "web",
+          "v": 100000
+        }
+      ],
+      "control_sql": "SELECT properties['platform'] k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "candidate_sql": "SELECT properties['platform'] k,count() v FROM events PREWHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "control_settings": {
+        "optimize_move_to_prewhere": "0"
+      },
+      "candidate_settings": {},
+      "speedup": 0.9833496823525403
+    },
+    {
+      "experiment": "18 Omit unused all-period unique subquery",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 42.33286599992425,
+        "server_ms": 37.908682,
+        "rows_read": 606208,
+        "bytes_read": 12897656
+      },
+      "candidate": {
+        "wall_ms": 24.974938000013935,
+        "server_ms": 19.231234,
+        "rows_read": 303104,
+        "bytes_read": 5152768
+      },
+      "control_data": [
+        {
+          "k": "2026-10-01",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-02",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-03",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-04",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-05",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-06",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-07",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-08",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-09",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-10",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-11",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-12",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-13",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-14",
+          "v": 19200
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "2026-10-01",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-02",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-03",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-04",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-05",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-06",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-07",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-08",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-09",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-10",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-11",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-12",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-13",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-14",
+          "v": 19200
+        }
+      ],
+      "control_sql": "SELECT k,v FROM (SELECT toDate(created_at) k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k) AS bucketed CROSS JOIN (SELECT uniq(profile_id) total_count FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer') AS totals",
+      "candidate_sql": "SELECT toDate(created_at) k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "control_settings": {},
+      "candidate_settings": {},
+      "speedup": 1.9712038239459828
+    },
+    {
+      "experiment": "19 Reuse narrow materialized acquisition value",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 97.77018199997656,
+        "server_ms": 95.430004,
+        "rows_read": 1200000,
+        "bytes_read": 473960570
+      },
+      "candidate": {
+        "wall_ms": 20.60692299994571,
+        "server_ms": 18.023753,
+        "rows_read": 303104,
+        "bytes_read": 5455872
+      },
+      "control_data": [
+        {
+          "k": "source0",
+          "v": 12000
+        },
+        {
+          "k": "source12",
+          "v": 12000
+        },
+        {
+          "k": "source16",
+          "v": 12000
+        },
+        {
+          "k": "source20",
+          "v": 12000
+        },
+        {
+          "k": "source24",
+          "v": 12000
+        },
+        {
+          "k": "source28",
+          "v": 12000
+        },
+        {
+          "k": "source32",
+          "v": 12000
+        },
+        {
+          "k": "source36",
+          "v": 12000
+        },
+        {
+          "k": "source4",
+          "v": 12000
+        },
+        {
+          "k": "source40",
+          "v": 12000
+        },
+        {
+          "k": "source44",
+          "v": 12000
+        },
+        {
+          "k": "source48",
+          "v": 12000
+        },
+        {
+          "k": "source52",
+          "v": 12000
+        },
+        {
+          "k": "source56",
+          "v": 12000
+        },
+        {
+          "k": "source60",
+          "v": 12000
+        },
+        {
+          "k": "source64",
+          "v": 12000
+        },
+        {
+          "k": "source68",
+          "v": 12000
+        },
+        {
+          "k": "source72",
+          "v": 12000
+        },
+        {
+          "k": "source76",
+          "v": 12000
+        },
+        {
+          "k": "source8",
+          "v": 12000
+        },
+        {
+          "k": "source80",
+          "v": 12000
+        },
+        {
+          "k": "source84",
+          "v": 12000
+        },
+        {
+          "k": "source88",
+          "v": 12000
+        },
+        {
+          "k": "source92",
+          "v": 12000
+        },
+        {
+          "k": "source96",
+          "v": 12000
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "source0",
+          "v": 12000
+        },
+        {
+          "k": "source12",
+          "v": 12000
+        },
+        {
+          "k": "source16",
+          "v": 12000
+        },
+        {
+          "k": "source20",
+          "v": 12000
+        },
+        {
+          "k": "source24",
+          "v": 12000
+        },
+        {
+          "k": "source28",
+          "v": 12000
+        },
+        {
+          "k": "source32",
+          "v": 12000
+        },
+        {
+          "k": "source36",
+          "v": 12000
+        },
+        {
+          "k": "source4",
+          "v": 12000
+        },
+        {
+          "k": "source40",
+          "v": 12000
+        },
+        {
+          "k": "source44",
+          "v": 12000
+        },
+        {
+          "k": "source48",
+          "v": 12000
+        },
+        {
+          "k": "source52",
+          "v": 12000
+        },
+        {
+          "k": "source56",
+          "v": 12000
+        },
+        {
+          "k": "source60",
+          "v": 12000
+        },
+        {
+          "k": "source64",
+          "v": 12000
+        },
+        {
+          "k": "source68",
+          "v": 12000
+        },
+        {
+          "k": "source72",
+          "v": 12000
+        },
+        {
+          "k": "source76",
+          "v": 12000
+        },
+        {
+          "k": "source8",
+          "v": 12000
+        },
+        {
+          "k": "source80",
+          "v": 12000
+        },
+        {
+          "k": "source84",
+          "v": 12000
+        },
+        {
+          "k": "source88",
+          "v": 12000
+        },
+        {
+          "k": "source92",
+          "v": 12000
+        },
+        {
+          "k": "source96",
+          "v": 12000
+        }
+      ],
+      "control_sql": "SELECT properties['exactSourceName'] k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "candidate_sql": "SELECT _property_exact_source_name k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "control_settings": {},
+      "candidate_settings": {},
+      "speedup": 5.294679970370211
+    },
+    {
+      "experiment": "20 Read-order optimization on latest events",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 6.155749999948057,
+        "server_ms": 4.4232309999999995,
+        "rows_read": 27,
+        "bytes_read": 480
+      },
+      "candidate": {
+        "wall_ms": 5.957025999919097,
+        "server_ms": 4.127133,
+        "rows_read": 27,
+        "bytes_read": 480
+      },
+      "control_data": [
+        {
+          "k": "2026-10-27 00:00:00.000"
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "2026-10-27 00:00:00.000"
+        }
+      ],
+      "control_sql": "SELECT created_at k FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot' ORDER BY created_at DESC LIMIT 1",
+      "candidate_sql": "SELECT created_at k FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot' ORDER BY created_at DESC LIMIT 1",
+      "control_settings": {
+        "optimize_read_in_order": "0"
+      },
+      "candidate_settings": {
+        "optimize_read_in_order": "1"
+      },
+      "speedup": 1.0717442350416135
+    },
+    {
+      "experiment": "21 Query-condition cache on repeated property scan",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 92.31800500003828,
+        "server_ms": 90.45307199999999,
+        "rows_read": 1200000,
+        "bytes_read": 473960570
+      },
+      "candidate": {
+        "wall_ms": 100.89797600005568,
+        "server_ms": 96.177185,
+        "rows_read": 1200000,
+        "bytes_read": 473960570
+      },
+      "control_data": [
+        {
+          "k": "android",
+          "v": 100000
+        },
+        {
+          "k": "ios",
+          "v": 100000
+        },
+        {
+          "k": "web",
+          "v": 100000
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "android",
+          "v": 100000
+        },
+        {
+          "k": "ios",
+          "v": 100000
+        },
+        {
+          "k": "web",
+          "v": 100000
+        }
+      ],
+      "control_sql": "SELECT properties['platform'] k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "candidate_sql": "SELECT properties['platform'] k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "control_settings": {
+        "use_query_condition_cache": "0"
+      },
+      "candidate_settings": {
+        "use_query_condition_cache": "1"
+      },
+      "speedup": 0.9404836708414787
+    },
+    {
+      "experiment": "22 Sorting in-order aggregation",
+      "result_equal": true,
+      "qualification": "Measured only; review before rollout",
+      "control": {
+        "wall_ms": 17.07480800007488,
+        "server_ms": 15.257494999999999,
+        "rows_read": 303104,
+        "bytes_read": 5152768
+      },
+      "candidate": {
+        "wall_ms": 17.885346999946705,
+        "server_ms": 15.811946,
+        "rows_read": 1200000,
+        "bytes_read": 20400962
+      },
+      "control_data": [
+        {
+          "k": "2026-10-01",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-02",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-03",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-04",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-05",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-06",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-07",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-08",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-09",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-10",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-11",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-12",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-13",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-14",
+          "v": 19200
+        }
+      ],
+      "candidate_data": [
+        {
+          "k": "2026-10-01",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-02",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-03",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-04",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-05",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-06",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-07",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-08",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-09",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-10",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-11",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-12",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-13",
+          "v": 21600
+        },
+        {
+          "k": "2026-10-14",
+          "v": 19200
+        }
+      ],
+      "control_sql": "SELECT toDate(created_at) k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "candidate_sql": "SELECT toDate(created_at) k,count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='answer' GROUP BY k ORDER BY k",
+      "control_settings": {
+        "optimize_aggregation_in_order": "0"
+      },
+      "candidate_settings": {
+        "optimize_aggregation_in_order": "1"
+      },
+      "speedup": 0.9649346766046379
+    },
+    {
+      "experiment": "23 Numeric versus string snapshot schema filter",
+      "result_equal": true,
+      "qualification": "Reject general rewrite: numeric strings can differ",
+      "control": {
+        "wall_ms": 10.236566000003222,
+        "server_ms": 8.020983000000001,
+        "rows_read": 27,
+        "bytes_read": 3747
+      },
+      "candidate": {
+        "wall_ms": 9.587657999986732,
+        "server_ms": 7.48912,
+        "rows_read": 27,
+        "bytes_read": 3747
+      },
+      "control_data": [
+        {
+          "v": 27
+        }
+      ],
+      "candidate_data": [
+        {
+          "v": 27
+        }
+      ],
+      "control_sql": "SELECT count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot' AND toFloat64OrNull(properties['snapshotSchemaVersion'])=2",
+      "candidate_sql": "SELECT count() v FROM events WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot' AND properties['snapshotSchemaVersion']='2'",
+      "control_settings": {},
+      "candidate_settings": {},
+      "speedup": 1.0710180902429125
+    },
+    {
+      "experiment": "24 Inlining one group current count",
+      "result_equal": true,
+      "qualification": "Reject generic rewrite: drops event/date/filter semantics",
+      "control": {
+        "wall_ms": 18.31077599990749,
+        "server_ms": 15.572204,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "candidate": {
+        "wall_ms": 5.4973219999965295,
+        "server_ms": 3.707868,
+        "rows_read": 1,
+        "bytes_read": 105
+      },
+      "control_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "candidate_data": [
+        {
+          "v": 4885
+        }
+      ],
+      "control_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "candidate_sql": "SELECT max(toFloat64OrNull(properties['stripe'])) v FROM groups FINAL WHERE project_id='bench' AND id='census'",
+      "control_settings": {},
+      "candidate_settings": {},
+      "speedup": 4.1997730232036306
+    },
+    {
+      "experiment": "25 Three provider aggregates in one scan",
+      "result_equal": true,
+      "qualification": "Requires fused-series planner with preserved per-series filters",
+      "control": {
+        "wall_ms": 52.538631999937024,
+        "server_ms": 46.245529999999995,
+        "rows_read": 98388,
+        "bytes_read": 4697910
+      },
+      "candidate": {
+        "wall_ms": 20.118236000030265,
+        "server_ms": 17.490074,
+        "rows_read": 32796,
+        "bytes_read": 1565970
+      },
+      "control_data": [
+        {
+          "v": 4885
+        },
+        {
+          "v": 931
+        },
+        {
+          "v": 224
+        }
+      ],
+      "candidate_data": [
+        {
+          "stripe": 4885,
+          "apple": 931,
+          "google": 224
+        }
+      ],
+      "control_sql": [
+        "SELECT max(toFloat64OrNull(g.properties['stripe'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+        "SELECT max(toFloat64OrNull(g.properties['apple'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+        "SELECT max(toFloat64OrNull(g.properties['google'])) v FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'"
+      ],
+      "candidate_sql": "SELECT max(toFloat64OrNull(g.properties['stripe'])) stripe,max(toFloat64OrNull(g.properties['apple'])) apple,max(toFloat64OrNull(g.properties['google'])) google FROM events e ARRAY JOIN groups AS gid LEFT ANY JOIN (SELECT id,properties FROM groups FINAL WHERE project_id='bench') g ON g.id=gid WHERE project_id='bench' AND created_at>='2026-10-01' AND created_at<'2026-10-28' AND name='Active Paid Subscribers Snapshot'",
+      "control_settings": {},
+      "candidate_settings": {},
+      "speedup": 2.6441014486273753
+    }
+  ]
+}

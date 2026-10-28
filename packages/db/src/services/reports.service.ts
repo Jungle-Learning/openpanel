@@ -217,7 +217,7 @@ export async function getReportDataCore(input: {
     return { ...meta, data: result };
   }
 
-  if (report.chartType === 'metric') {
+  if (['bar', 'pie', 'metric'].includes(report.chartType)) {
     const result = await AggregateChartEngine.execute(chartInput);
     return { ...meta, data: result };
   }

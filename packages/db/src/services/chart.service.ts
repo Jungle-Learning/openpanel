@@ -3,6 +3,7 @@ import { stripLeadingAndTrailingSlashes } from '@openpanel/common';
 import {
   getCohortIds,
   type IChartBreakdown,
+  type IChartEvent,
   type IChartEventFilter,
   type IGetChartDataInput,
 } from '@openpanel/validation';
@@ -88,6 +89,13 @@ const MATERIALIZED_EVENT_PROPERTY_COLUMNS: Record<string, string> = {
     '_property_fixed_follow_up_question_selected_text',
   'properties.platform': '_property_platform',
   'properties.whereDidUserComeFrom': '_property_where_did_user_come_from',
+};
+
+export const PROPERTY_METRIC_FUNCTIONS: Record<string, string> = {
+  property_sum: 'sum',
+  property_average: 'avg',
+  property_max: 'max',
+  property_min: 'min',
 };
 
 // Normalize an incoming field name into its canonical form. Returns a string
@@ -724,20 +732,15 @@ export async function getChartSql({
       'COUNT(*)::float / COUNT(DISTINCT profile_id)::float as count';
   }
 
-  const mathFunction = {
-    property_sum: 'sum',
-    property_average: 'avg',
-    property_max: 'max',
-    property_min: 'min',
-  }[event.segment as string];
+  const mathFunction = PROPERTY_METRIC_FUNCTIONS[event.segment];
 
   if (mathFunction && event.property) {
     const propertyKey = getSelectPropertyKey(
       event.property,
+      projectId,
       undefined,
       undefined,
-      undefined,
-      'e',
+      'e'
     );
 
     if (isNumericColumn(event.property)) {
@@ -936,17 +939,20 @@ export async function getChartSql({
   return sql;
 }
 
-export async function getAggregateChartSql({
-  event,
-  breakdowns: initialBreakdowns,
-  startDate,
-  endDate,
-  projectId,
-  limit,
-  timezone,
-}: Omit<IGetChartDataInput, 'interval' | 'chartType'> & {
-  timezone: string;
-}) {
+export async function getAggregateChartSql(
+  {
+    event,
+    breakdowns: initialBreakdowns,
+    startDate,
+    endDate,
+    projectId,
+    limit,
+    timezone,
+  }: Omit<IGetChartDataInput, 'interval' | 'chartType'> & {
+    timezone: string;
+  },
+  propertyMetrics?: IChartEvent[]
+) {
   const { sb, join, getJoins, with: addCte, getSql } = createSqlBuilder();
 
   // Drop breakdowns whose field name doesn't resolve to a known events
@@ -1234,12 +1240,7 @@ export async function getAggregateChartSql({
       'COUNT(*)::float / COUNT(DISTINCT profile_id)::float as count';
   }
 
-  const mathFunction = {
-    property_sum: 'sum',
-    property_average: 'avg',
-    property_max: 'max',
-    property_min: 'min',
-  }[event.segment as string];
+  const mathFunction = PROPERTY_METRIC_FUNCTIONS[event.segment];
 
   if (mathFunction && event.property) {
     const propertyKey = getSelectPropertyKey(
@@ -1257,6 +1258,35 @@ export async function getAggregateChartSql({
       sb.select.count = `${mathFunction}(toFloat64OrNull(${propertyKey})) as count`;
       sb.where.property = `${propertyKey} IS NOT NULL AND notEmpty(${propertyKey})`;
     }
+  }
+
+  if (propertyMetrics) {
+    // The batch planner accepts only metrics over the same event, filters and
+    // join scope. Keep validity per metric: an absent Stripe value must not
+    // remove an otherwise valid Apple/Google value from the shared scan.
+    delete sb.where.property;
+    sb.select.count = 'count(*) as count';
+    propertyMetrics.forEach((metric, index) => {
+      const fn = PROPERTY_METRIC_FUNCTIONS[metric.segment];
+      if (!fn || !metric.property) {
+        throw new Error('Property metric batch contains an unsupported metric');
+      }
+      const key = getSelectPropertyKey(
+        metric.property,
+        projectId,
+        undefined,
+        undefined,
+        'e'
+      );
+      const numeric = isNumericColumn(metric.property);
+      const present = numeric
+        ? `${key} IS NOT NULL`
+        : `${key} IS NOT NULL AND notEmpty(${key})`;
+      const value = numeric ? key : `toFloat64OrNull(${key})`;
+      sb.select[`metric_${index}`] =
+        `${fn}If(${value}, ${present}) AS metric_${index}`;
+      sb.select[`present_${index}`] = `countIf(${present}) AS present_${index}`;
+    });
   }
 
   if (event.segment === 'one_event_per_user') {

@@ -20,8 +20,10 @@ export type NormalizedInput = Awaited<ReturnType<typeof normalize>>;
  * Normalize a chart input into a clean structure with dates and normalized series
  */
 export async function normalize(
-  input: IReportInput,
-): Promise<IReportInputWithDates & { series: SeriesDefinition[] }> {
+  input: IReportInput
+): Promise<
+  IReportInputWithDates & { series: SeriesDefinition[]; timezone: string }
+> {
   const { timezone } = await getSettingsForProject(input.projectId);
   const { startDate, endDate } = getChartStartEndDate(
     {
@@ -174,5 +176,6 @@ export async function normalize(
     series: mergeGlobalFilters(normalizedSeries, input.globalFilters),
     startDate,
     endDate,
+    timezone,
   };
 }

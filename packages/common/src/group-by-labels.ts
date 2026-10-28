@@ -61,11 +61,16 @@ export function groupByLabels(data: ISerieDataItem[]): GroupedResult[] {
   return result
     .filter((group) => group.name.length > 0)
     .map((group) => {
+      const dataByDate = new Map<string, GroupedDataPoint>();
+      for (const point of group.data) {
+        // Match find(): the first row wins when a date appears twice.
+        if (!dataByDate.has(point.date)) dataByDate.set(point.date, point);
+      }
       return {
         ...group,
         // This will ensure that all dates are present in the data array
         data: Array.from(timestamps).map((date) => {
-          const dataPoint = group.data.find((dp) => dp.date === date);
+          const dataPoint = dataByDate.get(date);
           return dataPoint || { date, count: 0, total_count: 0 };
         }),
       };

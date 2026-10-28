@@ -1,6 +1,5 @@
 import { slug } from '@openpanel/common';
 import { alphabetIds } from '@openpanel/constants';
-import { getSettingsForProject } from '../services/organization.service';
 import type { NormalizedInput } from './normalize';
 import {
   isProfileSetDefinition,
@@ -14,7 +13,7 @@ import type { ConcreteSeries, Plan } from './types';
  * This sets up ConcreteSeries placeholders - actual breakdown expansion happens during fetch
  */
 export async function plan(normalized: NormalizedInput): Promise<Plan> {
-  const { timezone } = await getSettingsForProject(normalized.projectId);
+  const { timezone } = normalized;
 
   const concreteSeries: ConcreteSeries[] = [];
 
