@@ -18,38 +18,36 @@ export type IRechartPayloadItem = {
 };
 
 export function useRechartDataModel(series: IChartData['series']) {
-  return useMemo(() => {
-    return (
-      series[0]?.data.map(({ date }) => {
-        return {
-          date,
-          timestamp: parseChartDate(date).getTime(),
-          ...series.reduce((acc, serie, idx) => {
-            return {
-              ...acc,
-              ...serie.data.reduce(
-                (acc2, item) => {
-                  if (item.date === date) {
-                    if (item.previous) {
-                      acc2[`${serie.id}:prev:count`] = item.previous.value;
-                    }
-                    acc2[`${serie.id}:count`] = item.count;
-                    acc2[`${serie.id}:payload`] = {
-                      ...item,
-                      id: serie.id,
-                      event: serie.event,
-                      names: serie.names,
-                      color: getChartColor(idx),
-                    } satisfies IRechartPayloadItem;
-                  }
-                  return acc2;
-                },
-                {} as Record<string, any>,
-              ),
-            };
-          }, {}),
+  return useMemo(() => buildRechartDataModel(series), [series]);
+}
+
+export function buildRechartDataModel(series: IChartData['series']) {
+  const rows = new Map<
+    string,
+    { date: string; timestamp: number } & Record<string, any>
+  >();
+  for (const [index, serie] of series.entries()) {
+    for (const item of serie.data) {
+      let row = rows.get(item.date);
+      if (!row) {
+        row = {
+          date: item.date,
+          timestamp: parseChartDate(item.date).getTime(),
         };
-      }) ?? []
-    );
-  }, [series]);
+        rows.set(item.date, row);
+      }
+      if (item.previous) {
+        row[`${serie.id}:prev:count`] = item.previous.value;
+      }
+      row[`${serie.id}:count`] = item.count;
+      row[`${serie.id}:payload`] = {
+        ...item,
+        id: serie.id,
+        event: serie.event,
+        names: serie.names,
+        color: getChartColor(index),
+      } satisfies IRechartPayloadItem;
+    }
+  }
+  return [...rows.values()].sort((a, b) => a.timestamp - b.timestamp);
 }

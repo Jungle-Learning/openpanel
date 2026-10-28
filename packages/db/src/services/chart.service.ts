@@ -423,6 +423,7 @@ export async function getChartSql({
   projectId,
   timezone,
   metric,
+  options,
 }: IGetChartDataInput & { timezone: string }) {
   const {
     sb,
@@ -642,7 +643,10 @@ export async function getChartSql({
   sb.select.count = 'count(*) as count';
   // ClickHouse rejects WITH FILL when TO < FROM, so only emit a fill clause
   // for a valid range. The SELECT bucket truncation is always safe.
+  const fillMissingDates =
+    options?.type !== 'linear' || options.fillMissingDates !== false;
   const hasValidFillRange =
+    fillMissingDates &&
     !!startDate && !!endDate && new Date(endDate) >= new Date(startDate);
   let dateBucketExpression = '';
   switch (interval) {

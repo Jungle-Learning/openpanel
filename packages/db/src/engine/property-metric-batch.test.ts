@@ -213,6 +213,130 @@ describe('batched property metrics against ClickHouse', () => {
       4885, 931, 224,
     ]);
   });
+  it('plots immutable observed snapshot dates without inventing zero history', async () => {
+    const input = zReportInput.parse({
+      ...report(),
+      chartType: 'linear',
+      options: { type: 'linear', fillMissingDates: false },
+    });
+    const chart = await ChartEngine.execute(input);
+    const stripe = chart.series.find(
+      (series) => series.event.id === 'metric-0'
+    )!;
+    const google = chart.series.find(
+      (series) => series.event.id === 'metric-2'
+    )!;
+    expect(
+      stripe.data.map((point) => [point.date.slice(0, 10), point.count])
+    ).toEqual([
+      ['2026-10-25', 10],
+      ['2026-10-26', 9],
+    ]);
+    expect(google.data.map((point) => point.count)).toEqual([0, 3]);
+    // The mutable census is 4,885; history must retain its original 10 -> 9.
+    expect(stripe.metrics.max).toBe(10);
+
+    const defaultChart = await ChartEngine.execute({
+      ...input,
+      options: undefined,
+    });
+    const defaultStripe = defaultChart.series.find(
+      (series) => series.event.id === 'metric-0'
+    )!;
+    expect(
+      defaultStripe.data.find((point) => point.date.startsWith('2026-10-24'))
+        ?.count
+    ).toBe(0);
+    expect(
+      zReportInput.parse({ ...input, options: { type: 'linear' } }).options
+    ).toEqual({
+      type: 'linear',
+      fillMissingDates: true,
+    });
+  });
+
+  it('retains observed-date options through saved report data and empty historical ranges', async () => {
+    const dashboard = await db.dashboard.create({
+      data: { name: 'QA daily subscriber trend', projectId, organizationId },
+    });
+    const input = report();
+    const saved = await db.report.create({
+      data: {
+        name: 'Daily subscriber trend',
+        projectId,
+        dashboardId: dashboard.id,
+        chartType: 'linear',
+        interval: 'day',
+        range: 'custom',
+        startDate,
+        endDate,
+        metric: 'max',
+        events: input.series,
+        globalFilters: input.globalFilters,
+        breakdowns: [],
+        visibleSeries: [],
+        options: { type: 'linear', fillMissingDates: false },
+      },
+    });
+    const response = await getReportDataCore({
+      projectId,
+      organizationId,
+      reportId: saved.id,
+    });
+    expect(
+      'series' in response.data &&
+        response.data.series[0]?.data.map((point) => point.count)
+    ).toEqual([10, 9]);
+    const empty = await ChartEngine.execute({
+      ...input,
+      chartType: 'linear',
+      options: { type: 'linear', fillMissingDates: false },
+      startDate: '2025-01-01 00:00:00',
+      endDate: '2025-12-31 23:59:59',
+    });
+    expect(empty.series).toEqual([]);
+  });
+
+  it('compares observed buckets by period offset through the full chart engine', async () => {
+    const name = `${eventName} gapped comparison`;
+    await ch.insert({
+      table: 'events',
+      format: 'JSONEachRow',
+      values: [
+        [20, 100],
+        [21, 80],
+        [22, 90],
+        [23, 70],
+        [24, 60],
+      ].map(([day, count]) => ({
+        name,
+        project_id: projectId,
+        created_at: `2026-10-${day} 12:00:00`,
+        properties: { schema: '2', stripe: String(count) },
+      })),
+    });
+    const input = report();
+    const result = await ChartEngine.execute({
+      ...input,
+      chartType: 'linear',
+      previous: true,
+      options: { type: 'linear', fillMissingDates: false },
+      startDate: '2026-10-22 00:00:00',
+      endDate: '2026-10-24 23:59:59',
+      series: [{ ...input.series[0]!, name }],
+    });
+    expect(
+      result.series[0]?.data.map((point) => [
+        point.count,
+        point.previous?.value,
+      ])
+    ).toEqual([
+      [90, undefined],
+      [70, 100],
+      [60, 80],
+    ]);
+  });
+
   it('matches the existing path when comparing previous periods', async () => {
     const input = {
       ...report(),
