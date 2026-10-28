@@ -20,6 +20,7 @@ function hasSnapshotSchema(
     return false;
   }
   const filter = filters[0];
+  // Match every canonical field so customized filters are never replaced.
   return (
     filter?.id === 'snapshot-schema' &&
     filter.name === 'properties.snapshotSchemaVersion' &&
