@@ -44,6 +44,26 @@ afterAll(() => {
 });
 
 describe('chart latency SQL', () => {
+  it('resolves group property metrics through the joined group table', async () => {
+    const sql = await getChartSql(
+      chartInput({
+        event: {
+          id: 'subscriber-count',
+          name: 'Active Paid Subscribers Snapshot',
+          segment: 'property_max',
+          property: 'group.properties.stripeActivePaidSubscribers',
+          filters: [],
+        },
+        breakdowns: [],
+        metric: 'max',
+      })
+    );
+
+    expect(sql).toContain("_g.properties['stripeActivePaidSubscribers']");
+    expect(sql).not.toContain('toFloat64OrNull(group.properties.');
+    expect(sql).toContain('LEFT ANY JOIN _g');
+  });
+
   it('skips the unused all-period unique scan for sum metrics', async () => {
     const sql = await getChartSql(chartInput());
 
@@ -113,11 +133,9 @@ describe('chart projection migration', () => {
   it('adds a dedicated exact-source projection in self-hosted mode', () => {
     const sql = getExactSourceProjectionCommands(false).join('\n');
 
+    expect(sql).toContain("MATERIALIZED properties['exactSourceName']");
     expect(sql).toContain(
-      "MATERIALIZED properties['exactSourceName']",
-    );
-    expect(sql).toContain(
-      'ALTER TABLE events ADD PROJECTION IF NOT EXISTS chart_events_by_exact_source',
+      'ALTER TABLE events ADD PROJECTION IF NOT EXISTS chart_events_by_exact_source'
     );
     expect(sql).toContain('_property_exact_source_name');
   });

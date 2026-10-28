@@ -36,6 +36,15 @@ export function compute(
       return;
     }
 
+    // Compilation is independent of the date, breakdown and evaluation scope.
+    // Reuse the expression while keeping a fresh scope for each data point.
+    let expression: mathjs.EvalFunction | undefined;
+    try {
+      expression = mathjs.parse(formula.formula).compile();
+    } catch {
+      // Invalid formulas retain the existing zero/unknown result behavior.
+    }
+
     // Group ALL series (events + previously computed formulas) by breakdown signature
     // Series with the same breakdown values should be computed together
     const seriesByBreakdown = new Map<string, ConcreteSeries[]>();
@@ -119,10 +128,7 @@ export function compute(
       // Evaluate formula for total_count
       let formulaTotalCount: number | undefined;
       try {
-        const result = mathjs
-          .parse(formula.formula)
-          .compile()
-          .evaluate(totalCountScope) as number;
+        const result = expression?.evaluate(totalCountScope) as number;
         formulaTotalCount =
           Number.isNaN(result) || !Number.isFinite(result)
             ? undefined
@@ -169,10 +175,7 @@ export function compute(
         // Evaluate formula
         let count: number;
         try {
-          count = mathjs
-            .parse(formula.formula)
-            .compile()
-            .evaluate(scope) as number;
+          count = expression?.evaluate(scope) as number;
         } catch (error) {
           count = 0;
         }

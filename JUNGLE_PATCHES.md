@@ -21,6 +21,11 @@ upstream PRs when a patch is generally useful.
   Events → Custom events library. Updates retain the event ID, detect concurrent
   edits, and change chart cache keys so reports use the latest definition.
 
+- Chart performance: compatible aggregate property metrics share a scan;
+  saved bar/pie API results use the aggregate engine and group metrics resolve
+  on both engines. Formula compilation and date alignment avoid repeated work.
+  See [the 27-experiment qualification](docs/performance-2026-10-28.md).
+
 ## Patch discipline
 
 - Keep `upstream` pointing at `Openpanel-dev/openpanel`.

@@ -1,0 +1,21 @@
+{
+  "base": "1eea86324ce65298b3fd7c39731b0bcbed9db646",
+  "results": [
+    {
+      "experiment": "26 Compile formula once across dates and breakdowns",
+      "result_equal": true,
+      "repeats": 5,
+      "control_ms": 79.79006099999992,
+      "candidate_ms": 31.986977999999908,
+      "speedup": 2.4944544933253825
+    },
+    {
+      "experiment": "27 Index dates when aligning large chart series",
+      "result_equal": true,
+      "repeats": 5,
+      "control_ms": 205.82981699999982,
+      "candidate_ms": 124.22249999999985,
+      "speedup": 1.656944732234499
+    }
+  ]
+}

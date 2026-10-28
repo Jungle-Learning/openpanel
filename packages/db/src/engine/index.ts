@@ -5,15 +5,13 @@ import type { FinalChart, IReportInput } from '@openpanel/validation';
 import { chQuery } from '../clickhouse/client';
 import { getAggregateChartSql } from '../services/chart.service';
 import { getChartPrevStartEndDate } from '../services/date.service';
-import {
-  getOrganizationSubscriptionChartEndDate,
-  getSettingsForProject,
-} from '../services/organization.service';
+import { getOrganizationSubscriptionChartEndDate } from '../services/organization.service';
 import { compute } from './compute';
 import { fetch } from './fetch';
 import { format } from './format';
 import { normalize } from './normalize';
 import { plan } from './plan';
+import { fetchPropertyMetricBatch } from './property-metric-batch';
 import {
   isProfileSetDefinition,
   isQueryBackedDefinition,
@@ -108,7 +106,7 @@ export async function executeAggregateChart(
     normalized.endDate = endDate;
   }
 
-  const { timezone } = await getSettingsForProject(normalized.projectId);
+  const { timezone } = normalized;
   // Aggregate breakdowns are sorted by count, so returning the top 100 keeps
   // bar and pie reports responsive without transferring thousands of rows.
   // Explicit report limits remain supported for callers that need more.
@@ -125,6 +123,10 @@ export async function executeAggregateChart(
 
   // Stage 2: Fetch aggregate data for current period (event series only)
   const fetchedSeries: ConcreteSeries[] = [];
+  const metricBatch = await fetchPropertyMetricBatch(
+    normalized,
+    aggregateQuerySeriesLimit
+  );
 
   for (let i = 0; i < normalized.series.length; i++) {
     const definition = normalized.series[i]!;
@@ -159,12 +161,11 @@ export async function executeAggregateChart(
     };
 
     // Execute aggregate query
-    let queryResult = await chQuery<ISerieDataItem>(
-      await getAggregateChartSql(queryInput),
-      {
+    let queryResult =
+      metricBatch?.[i] ??
+      (await chQuery<ISerieDataItem>(await getAggregateChartSql(queryInput), {
         session_timezone: timezone,
-      },
-    );
+      }));
 
     // Fallback: if no results with breakdowns, try without breakdowns
     if (queryResult.length === 0 && normalized.breakdowns.length > 0) {
@@ -255,6 +256,10 @@ export async function executeAggregateChart(
     const previousPeriod = getChartPrevStartEndDate(currentPeriod);
 
     const previousFetchedSeries: ConcreteSeries[] = [];
+    const previousMetricBatch = await fetchPropertyMetricBatch(
+      { ...normalized, ...previousPeriod },
+      aggregateQuerySeriesLimit
+    );
 
     for (let i = 0; i < normalized.series.length; i++) {
       const definition = normalized.series[i]!;
@@ -286,12 +291,11 @@ export async function executeAggregateChart(
         timezone,
       };
 
-      let queryResult = await chQuery<ISerieDataItem>(
-        await getAggregateChartSql(queryInput),
-        {
+      let queryResult =
+        previousMetricBatch?.[i] ??
+        (await chQuery<ISerieDataItem>(await getAggregateChartSql(queryInput), {
           session_timezone: timezone,
-        },
-      );
+        }));
 
       if (queryResult.length === 0 && normalized.breakdowns.length > 0) {
         queryResult = await chQuery<ISerieDataItem>(
