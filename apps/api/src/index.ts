@@ -6,6 +6,7 @@ import { buildApp } from './app';
 import { shutdown } from './utils/graceful-shutdown';
 import { logger } from './utils/logger';
 import { getRedisPub } from '@openpanel/redis';
+import { migrateSubscriberHistoryReport } from './utils/subscriber-history-report-migration';
 
 sourceMapSupport.install();
 
@@ -35,12 +36,27 @@ const startServer = async () => {
 
     await fastify.listen({ host, port });
 
+    if (process.env.NODE_ENV === 'production') {
+      // A bounded, one-report data migration. Keep analytics availability
+      // independent of this optional configuration upgrade.
+      void migrateSubscriberHistoryReport()
+        .then((result) =>
+          logger.info(result, 'Subscriber history report migration')
+        )
+        .catch((error) =>
+          logger.error(
+            { err: error },
+            'Subscriber history report migration failed'
+          )
+        );
+    }
+
     try {
       await getRedisPub().config('SET', 'notify-keyspace-events', 'Ex');
     } catch (error) {
       logger.warn({ err: error }, 'Failed to set redis notify-keyspace-events');
       logger.warn(
-        'If you use a managed Redis service, you may need to set this manually.',
+        'If you use a managed Redis service, you may need to set this manually.'
       );
       logger.warn('Otherwise some functions may not work as expected.');
     }
