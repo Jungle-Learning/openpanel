@@ -23,12 +23,12 @@ function baseline(path) {
 const median = values => [...values].sort((a,b) => a-b)[Math.floor(values.length/2)];
 function measure(name, control, candidate) {
   if (!isDeepStrictEqual(control(), candidate())) throw new Error(`${name}: output changed`);
-  const a=[], b=[];
+  const controlTimes=[], candidateTimes=[];
   for(let i=0;i<5;i++) {
-    const runs = i%2 ? [[candidate,b],[control,a]] : [[control,a],[candidate,b]];
+    const runs = i%2 ? [[candidate,candidateTimes],[control,controlTimes]] : [[control,controlTimes],[candidate,candidateTimes]];
     for(const [fn,times] of runs) { const start=performance.now(); fn(); times.push(performance.now()-start); }
   }
-  return {experiment:name, result_equal:true, repeats:5, control_ms:median(a),candidate_ms:median(b), speedup:median(a)/median(b)};
+  return {experiment:name, result_equal:true, repeats:5, control_ms:median(controlTimes),candidate_ms:median(candidateTimes), speedup:median(controlTimes)/median(candidateTimes)};
 }
 try {
   const { compute: oldCompute } = await baseline('packages/db/src/engine/compute.ts');

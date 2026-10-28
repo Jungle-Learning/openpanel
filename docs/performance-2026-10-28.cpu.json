@@ -5,17 +5,17 @@
       "experiment": "26 Compile formula once across dates and breakdowns",
       "result_equal": true,
       "repeats": 5,
-      "control_ms": 117.89548799999966,
-      "candidate_ms": 48.20952899999975,
-      "speedup": 2.4454810168338352
+      "control_ms": 79.79006099999992,
+      "candidate_ms": 31.986977999999908,
+      "speedup": 2.4944544933253825
     },
     {
       "experiment": "27 Index dates when aligning large chart series",
       "result_equal": true,
       "repeats": 5,
-      "control_ms": 258.49192800000037,
-      "candidate_ms": 164.44615800000065,
-      "speedup": 1.5718939934127214
+      "control_ms": 205.82981699999982,
+      "candidate_ms": 124.22249999999985,
+      "speedup": 1.656944732234499
     }
   ]
 }
