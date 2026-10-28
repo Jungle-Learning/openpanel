@@ -60,6 +60,7 @@ export async function fetch(plan: Plan): Promise<ConcreteSeries[]> {
       previous: plan.input.previous ?? false,
       limit: plan.input.limit,
       offset: plan.input.offset,
+      options: plan.input.options,
     };
 
     // Execute query

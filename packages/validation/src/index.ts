@@ -225,11 +225,17 @@ export const zHistogramOptions = z.object({
   stacked: z.boolean().default(false),
 });
 
+export const zLinearOptions = z.object({
+  type: z.literal('linear'),
+  fillMissingDates: z.boolean().default(true),
+});
+
 export const zReportOptions = z.discriminatedUnion('type', [
   zFunnelOptions,
   zRetentionOptions,
   zSankeyOptions,
   zHistogramOptions,
+  zLinearOptions,
 ]);
 
 export type IReportOptions = z.infer<typeof zReportOptions>;

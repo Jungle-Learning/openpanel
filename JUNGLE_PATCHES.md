@@ -32,3 +32,11 @@ upstream PRs when a patch is generally useful.
 - Rebase Jungle branches onto upstream `main` before upgrading production.
 - Do not use this fork for broad dashboard redesigns unless the change is
   explicitly tied to Jungle's analytics migration or production reliability.
+
+## Daily subscriber history without invented zeroes (2026-10-28)
+
+Line reports may opt into `options: { type: "linear", fillMissingDates: false }`
+to return only observed time buckets. Default date filling remains unchanged.
+The subscriber trend uses immutable event properties and daily max, preserving
+actual declines and genuine zero values. History begins October 27, 2026; an
+empty earlier range is unknown data, not evidence of zero subscribers.
