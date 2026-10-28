@@ -1,4 +1,5 @@
 import {
+  DateTime,
   average,
   getPreviousMetric,
   max,
@@ -8,8 +9,26 @@ import {
   sum,
 } from '@openpanel/common';
 import { alphabetIds } from '@openpanel/constants';
-import type { FinalChart } from '@openpanel/validation';
+import type { FinalChart, IInterval } from '@openpanel/validation';
 import type { ConcreteSeries } from './types';
+
+type ObservedPeriodAlignment = {
+  interval: IInterval;
+  currentStartDate: string;
+  previousStartDate: string;
+};
+
+function bucketOffset(date: string, startDate: string, interval: IInterval) {
+  // Query buckets are project-local calendar dates; use UTC here to avoid
+  // interpreting those strings in the API server's timezone or across DST.
+  const bucket = DateTime.fromISO(date.replace(' ', 'T'), {
+    zone: 'UTC',
+  }).startOf(interval);
+  const start = DateTime.fromISO(startDate.replace(' ', 'T'), {
+    zone: 'UTC',
+  }).startOf(interval);
+  return Math.round(bucket.diff(start, interval).as(interval));
+}
 
 /**
  * Format concrete series into FinalChart format (backward compatible)
@@ -27,7 +46,8 @@ export function format(
   }>,
   includeAlphaIds: boolean,
   previousSeries: ConcreteSeries[] | null = null,
-  limit: number | undefined = undefined
+  limit: number | undefined = undefined,
+  observedAlignment?: ObservedPeriodAlignment
 ): FinalChart {
   // Collect definition indices that should be hidden from the chart.
   // A formula can opt to hide any of the series it references (by alpha ID)
@@ -38,7 +58,9 @@ export function format(
       continue;
     }
     for (const alphaId of definition.hideSeries) {
-      const index = alphabetIds.indexOf(alphaId as (typeof alphabetIds)[number]);
+      const index = alphabetIds.indexOf(
+        alphaId as (typeof alphabetIds)[number]
+      );
       if (index >= 0) {
         hiddenDefinitionIndices.add(index);
       }
@@ -96,6 +118,19 @@ export function format(
         ps.definitionIndex === cs.definitionIndex &&
         ps.name.slice(1).join(':::') === cs.name.slice(1).join(':::')
     );
+    const previousByOffset =
+      observedAlignment && previousSerie
+        ? new Map(
+            previousSerie.data.map((item) => [
+              bucketOffset(
+                item.date,
+                observedAlignment.previousStartDate,
+                observedAlignment.interval
+              ),
+              item,
+            ])
+          )
+        : undefined;
 
     return {
       id: slug(cs.id),
@@ -136,16 +171,24 @@ export function format(
             }
           : {}),
       },
-      data: cs.data.map((item, index) => ({
-        date: item.date,
-        count: item.count,
-        previous: previousSerie?.data[index]
-          ? getPreviousMetric(
-              item.count,
-              previousSerie.data[index]?.count ?? null
+      data: cs.data.map((item, index) => {
+        const previous = observedAlignment
+          ? previousByOffset?.get(
+              bucketOffset(
+                item.date,
+                observedAlignment.currentStartDate,
+                observedAlignment.interval
+              )
             )
-          : undefined,
-      })),
+          : previousSerie?.data[index];
+        return {
+          date: item.date,
+          count: item.count,
+          previous: previous
+            ? getPreviousMetric(item.count, previous.count)
+            : undefined,
+        };
+      }),
     };
   });
 

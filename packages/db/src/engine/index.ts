@@ -58,12 +58,14 @@ export async function executeChart(input: IReportInput): Promise<FinalChart> {
 
   // Stage 5: Fetch previous period if requested
   let previousSeries: ConcreteSeries[] | null = null;
+  let previousStartDate: string | undefined;
   if (input.previous) {
     const currentPeriod = {
       startDate: normalized.startDate,
       endDate: normalized.endDate,
     };
     const previousPeriod = getChartPrevStartEndDate(currentPeriod);
+    previousStartDate = previousPeriod.startDate;
 
     const previousPlan = await plan({
       ...normalized,
@@ -82,6 +84,15 @@ export async function executeChart(input: IReportInput): Promise<FinalChart> {
     includeAlphaIds,
     previousSeries,
     normalized.limit,
+    normalized.options?.type === 'linear' &&
+      normalized.options.fillMissingDates === false &&
+      previousStartDate
+      ? {
+          interval: normalized.interval,
+          currentStartDate: normalized.startDate,
+          previousStartDate,
+        }
+      : undefined,
   );
 
   return response;
