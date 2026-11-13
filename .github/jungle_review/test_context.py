@@ -291,7 +291,8 @@ class CredentialAndSymlinkTests(FakeGitHubTestCase):
     def blob_sha_requested(self, text: str) -> bool:
         return any(endpoint.endswith(fake_sha("blob:" + text)) for endpoint in self.github.requests)
 
-    def split_mode_change(self, base_mode, head_mode, *, reversed_order=False, missing_patch=False):
+    def split_mode_change(self, base_mode, head_mode, *, reversed_order=False, missing_patch=False,
+                          missing_removed_patch=False):
         old_text = "old-private-pointer" if base_mode != FILE_MODE else "export const old = 1;\n"
         new_text = "new-private-pointer" if head_mode != FILE_MODE else "export const source = 1;\n"
         files = {**BASE_FILES, "src/converted.ts": (base_mode, old_text)}
@@ -305,6 +306,8 @@ class CredentialAndSymlinkTests(FakeGitHubTestCase):
                  "patch": "@@ -0,0 +1 @@\n+" + new_text.rstrip("\n")}]
         if missing_patch:
             rows[1].pop("patch")
+        if missing_removed_patch:
+            rows[0].pop("patch")
         if reversed_order:
             rows.reverse()
         self.github._compare = lambda before, after: {"merge_base_commit": {"sha": base}, "files": rows}
@@ -323,14 +326,38 @@ class CredentialAndSymlinkTests(FakeGitHubTestCase):
                     self.assertNotIn("old-private-pointer", json.dumps(result))
                     self.assertFalse(self.blob_sha_requested("old-private-pointer"))
 
-    def test_github_split_mode_change_excludes_a_nonregular_head(self):
+    def test_github_split_mode_change_keeps_deleted_source_without_nonregular_head(self):
+        for mode in (SYMLINK, context.SUBMODULE_MODE):
+            for reversed_order in (False, True):
+                with self.subTest(head_mode=mode, reversed_order=reversed_order):
+                    result = self.split_mode_change(FILE_MODE, mode, reversed_order=reversed_order)
+                    self.assertEqual(len(result["files"]), 1)
+                    self.assertEqual(result["files"][0]["status"], "removed")
+                    self.assertEqual(result["files"][0]["patch"], "@@ -1 +0,0 @@\n-export const old = 1;")
+                    self.assertNotIn("head_content", result["files"][0])
+                    self.assertEqual(result["coverage"]["excluded_files"], [])
+                    self.assertNotIn("new-private-pointer", json.dumps(result))
+                    self.assertFalse(self.blob_sha_requested("new-private-pointer"))
+
+    def test_github_split_mode_change_missing_deleted_source_is_incomplete(self):
+        result = self.split_mode_change(FILE_MODE, SYMLINK, missing_removed_patch=True)
+        self.assertFalse(result["coverage"]["complete"])
+        self.assertIn({"path": "src/converted.ts", "reason": "no_patch_from_api"},
+                      result["coverage"]["omitted_files"])
+
+    def test_combined_mode_change_keeps_deleted_source_without_reading_new_pointer(self):
         for mode in (SYMLINK, context.SUBMODULE_MODE):
             with self.subTest(head_mode=mode):
-                result = self.split_mode_change(FILE_MODE, mode)
-                self.assertEqual(len(result["files"]), 1)
-                self.assertIsNone(result["files"][0]["patch"])
-                self.assertIn({"path": "src/converted.ts", "reason": "symlink_or_submodule"},
-                              result["coverage"]["excluded_files"])
+                files = {**BASE_FILES, "src/converted.ts": (FILE_MODE, "export const old = 1;\n")}
+                base = self.github.commit("removed-source-base-" + mode, self.shas["base"], files)
+                files["src/converted.ts"] = (mode, "new-private-pointer")
+                head = self.github.commit("nonregular-head-" + mode, base, files)
+                result = context.collect_context(REPOSITORY, NUMBER, head_sha=head, base_sha=base)
+                record = next(item for item in result["files"] if item["path"] == "src/converted.ts")
+                self.assertEqual(record["status"], "removed")
+                self.assertIn("-export const old = 1;", record["patch"])
+                self.assertNotIn("head_content", record)
+                self.assertEqual(result["coverage"]["excluded_files"], [])
                 self.assertNotIn("new-private-pointer", json.dumps(result))
                 self.assertFalse(self.blob_sha_requested("new-private-pointer"))
 
