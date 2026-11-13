@@ -1,13 +1,13 @@
 {
   "schema": 2,
-  "release_sha256": "ab70ad12af5504bc1e457234f981bddec5db4c5a3e9283a6181e5847a4199ed7",
+  "release_sha256": "f774d0b0a00ce4496f6648ee8106b351947ce1db48398f01779d8e35b3ec1e57",
   "files": {
     ".github/jungle_review/README.md": {
-      "sha256": "0f04ae3b16cd27cff73a8ead4453df8314d9b028c6df03a3e18ffa4639449b2c",
+      "sha256": "4b32574861eb22f342b702f57e03d1a4ac6b77d8bcc86a4c818ee85c6022bc55",
       "mode": "100644"
     },
     ".github/jungle_review/context.py": {
-      "sha256": "31d573440516fba8a9959211e9c4bd1b2282c25299275639c93b9f35ca504c30",
+      "sha256": "38c27657fb4ad25164b32ef566b74950cb5692ca6111f38feb71111f0643c5a8",
       "mode": "100644"
     },
     ".github/jungle_review/dispositions.py": {
@@ -71,11 +71,11 @@
       "mode": "100644"
     },
     ".github/jungle_review/provider.py": {
-      "sha256": "24967cbd7276b76f22726953907956a4688f171efbcc19de94341aac5fdd8164",
+      "sha256": "962eabf09076678aae2a9c408da0e3eb64af5efe6be5a241e26a41102fa413bd",
       "mode": "100644"
     },
     ".github/jungle_review/publish.py": {
-      "sha256": "b45f8da625ab08d1090d7ed4b333908abed4328f5e57a0abe5063b783f4b870f",
+      "sha256": "177eb35e720c8c9eae577adc702b0b1ccbe7ec630e6f70916ff7eccd995e408d",
       "mode": "100644"
     },
     ".github/jungle_review/questions.py": {
@@ -119,7 +119,7 @@
       "mode": "100644"
     },
     ".github/jungle_review/test_evidence.py": {
-      "sha256": "48d40e487ea3cb20e4c7fd162bbd0e3be70bcaaed6cd37e031a97d8a572d6e65",
+      "sha256": "078ca2a5e80d2c7a2b1e0ae486ff01d8d771708c3b0b171dd332d0818ed6c195",
       "mode": "100644"
     },
     ".github/jungle_review/test_focused.py": {
@@ -131,11 +131,11 @@
       "mode": "100644"
     },
     ".github/jungle_review/test_phase.py": {
-      "sha256": "c3049d8bcdb63adb125d1402375a0f70caf496ebb221047975fa09130ff880f1",
+      "sha256": "8138da91b934f2d64199a682bd99259a782b66f911ec1e984f0c855eb0df14b8",
       "mode": "100644"
     },
     ".github/jungle_review/test_prefix_contract.py": {
-      "sha256": "a73a6a1ba48208587cf311aa5a1b36866144b9e9767ebd6c26331f717c501fb7",
+      "sha256": "78a93e7572487bf8ad8f0f1edeeb88632611c228a20980ad794af5ad1eb7890c",
       "mode": "100644"
     },
     ".github/jungle_review/test_provider.py": {
@@ -143,7 +143,7 @@
       "mode": "100644"
     },
     ".github/jungle_review/test_publish.py": {
-      "sha256": "20ffeb5890d57e3ee9d7d73a84986348b5f8a5686b061c2168c76a7859c18afe",
+      "sha256": "11624fe0792654f0e92c2e786c45202038ff28ad2b7fd3a3e0869b77d99253bd",
       "mode": "100644"
     },
     ".github/jungle_review/test_publish_focused.py": {
@@ -163,7 +163,7 @@
       "mode": "100644"
     },
     ".github/jungle_review/test_selected.py": {
-      "sha256": "8a3488240fd22ec873293a98fb8e96d28e2460eda61077ef0c971c5f4ad5e989",
+      "sha256": "97389b31a289a7746f60ae955846ac550448819c7a0a3c462ac50cf29e39ef83",
       "mode": "100644"
     },
     ".github/jungle_review/test_service_tier.py": {
@@ -171,15 +171,15 @@
       "mode": "100644"
     },
     ".github/jungle_review/test_source_deadline.py": {
-      "sha256": "d9788866736868377c5bf5a27e226ea05bdd1d3b08a83a10e24ce8cf31e630d1",
+      "sha256": "10227a3ed7d65156829566004f0ae87bd54c39a89f28bbb37709f08d43d89a31",
       "mode": "100644"
     },
     ".github/jungle_review/test_units.py": {
-      "sha256": "f0ed1e5d8cf616bb46914180a9b5e19331fb0ab003e6acf925a94e1af00cb47b",
+      "sha256": "4a9a4de95297b878fde18ab0de5c398495adffe4b2b4bd01825084748d882515",
       "mode": "100644"
     },
     ".github/jungle_review/units.py": {
-      "sha256": "3605e52d547415a27fc737c0937ee980eeecc90f60d9eb4698225bacdc169ff5",
+      "sha256": "e1b932dca28294fe425ff0aef08180ee0014f658480d66b714b1c9de7749d43f",
       "mode": "100644"
     },
     ".github/workflows/jungle-review-tests.yml": {
@@ -193,6 +193,6 @@
   },
   "source": {
     "repository": "Jungle-Learning/jungle-web",
-    "commit": "8ce99bb50e8a112b87f2f27266c2554933ab032f"
+    "commit": "aa5148792eb532024aa7216be13a398618802745"
   }
 }

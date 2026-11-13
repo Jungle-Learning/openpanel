@@ -143,9 +143,10 @@ class PagedReadTests(unittest.TestCase):  # M1
         self.assertFalse(status["complete"])
         self.assertEqual(status["returned"], [1, 600])
         self.assertEqual(status["stopped"], "page bound")
+        # A read cut at the page bound is the reviewer's open question, not unexamined changed code.
         self.assertTrue(any("read of src/a.ts (head) lines 1-900 returned 1-600 of 1000 (page bound)" in g
-                            for g in result["coverage_gaps"]))
-        self.assertEqual(result["status"], "partial")
+                            for g in result["review_notes"]))
+        self.assertEqual(result["status"], "complete")
 
     def test_a_character_truncated_page_continues_from_the_last_line_actually_returned(self):
         log = []
@@ -268,8 +269,8 @@ class FinalEvidenceTests(unittest.TestCase):  # M3, M6
         self.assertFalse(any("collector snippet" in g for g in incidental["coverage_gaps"]))
         material = self.exclusion_run(self.SNIPPET, cite=True)
         self.assertTrue(any(g.startswith("collector snippet src/a.ts (head) lines 300-301 excluded") for g in
-                            material["coverage_gaps"]))
-        self.assertEqual(material["status"], "partial")
+                            material["review_notes"]))
+        self.assertEqual(material["status"], "complete")
 
     def test_all_open_questions_are_carried_and_trimmed_by_name_before_candidates(self):
         many = answer(hypotheses=[HYP], gaps=[f"question {n}" for n in range(12)])
@@ -285,7 +286,7 @@ class FinalEvidenceTests(unittest.TestCase):  # M3, M6
                 return super().required_budget(system, payload, phase, **kwargs)
         tight = Tight([many, answer()])
         result = run(tight, context=self.context([]))
-        trimmed = [g for g in result["coverage_gaps"] if g.startswith("open question not passed to the final "
+        trimmed = [g for g in result["review_notes"] if g.startswith("open question not passed to the final "
                                                                       "verification (final budget)")]
         self.assertTrue(trimmed)
         self.assertEqual(len(result["audit"]["items"]), 1)  # the candidate is kept
@@ -310,7 +311,7 @@ class DispositionIntegrationTests(unittest.TestCase):
         self.assertEqual(result["status"], "complete")  # the fixture accounted for the candidate
         self.assertEqual([r.get("status") for r in result["audit"]["dispositions"]], ["rejected"])
 
-    def test_missing_unresolved_or_unknown_dispositions_keep_a_reviewed_case_partial(self):
+    def test_missing_unresolved_or_unknown_dispositions_are_named_review_notes(self):
         cases = {
             "missing": dict(answer(), dispositions=None),
             "unresolved": dict(answer(), dispositions=[{"candidate_id": "c1", "verdict": "unresolved",
@@ -322,8 +323,9 @@ class DispositionIntegrationTests(unittest.TestCase):
             with self.subTest(case=name):
                 model = UnitModel([answer(hypotheses=[HYP]), final])
                 result = run(model, context=self.small())
-                self.assertEqual(result["status"], "partial")
-                self.assertTrue(result["coverage_gaps"])
+                # The changed code was examined; an undecided candidate is reported, not a coverage gap.
+                self.assertEqual(result["status"], "complete")
+                self.assertTrue(result["review_notes"])
 
     def test_the_helper_receives_the_post_validation_findings(self):
         import units as module
@@ -356,7 +358,8 @@ class DispositionIntegrationTests(unittest.TestCase):
         model = UnitModel([answer(hypotheses=[dict(HYP, path="src/a.ts")]), final])
         result = run(model, context=self.small())
         self.assertEqual(result["findings"], [])
-        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["status"], "complete")
+        self.assertTrue(result["review_notes"])
         self.assertNotEqual([r.get("status") for r in result["audit"]["dispositions"]], ["supported"])
 
     def test_supplied_paths_come_from_the_admitted_final_package_only(self):
@@ -413,7 +416,7 @@ class DocumentationSelectionIntegrationTests(unittest.TestCase):
         result = run(model, context=self.react_change())
         self.assertTrue(any(e.get("status") == "over_limit" and e.get("cause") == "auto_selected"
                             for e in result["documentation"]["requests"]))
-        self.assertTrue(any("filled" in g and "automatic selection" in g for g in result["coverage_gaps"]))
+        self.assertTrue(any("filled" in g and "automatic selection" in g for g in result["review_notes"]))
 
     def test_an_automatic_document_excluded_at_the_final_fit_is_a_named_gap(self):
         class Tight(UnitModel):
@@ -424,8 +427,8 @@ class DocumentationSelectionIntegrationTests(unittest.TestCase):
                 return super().required_budget(system, payload, phase, **kwargs)
         model = Tight([answer(hypotheses=[dict(HYP, path="src/view.tsx")]), answer()])
         result = run(model, context=self.react_change())
-        self.assertTrue(any("react.strict-mode" in g or "Requested evidence" in g for g in result["coverage_gaps"]))
-        self.assertEqual(result["status"], "partial")
+        self.assertTrue(any("react.strict-mode" in g or "Requested evidence" in g for g in result["review_notes"]))
+        self.assertEqual(result["status"], "complete")
 
     def test_publisher_diagnostics_count_automatic_picks_by_basis(self):
         import publish
@@ -467,7 +470,7 @@ class FinalHoldTests(unittest.TestCase):  # C1
         result = run(model, context=sample_inventory())
         log = result["units"]["units"]
         self.assertFalse(any(u["role"] == "deferred" and u["audited"] for u in log))
-        self.assertTrue(any(g.startswith("deferred unit") and "(budget)" in g for g in result["coverage_gaps"]))
+        self.assertTrue(any(g.startswith("deferred unit") and "(budget)" in g for g in result["review_notes"]))
         verification = [c for c in model.calls if c["phase"] == "verification"]
         self.assertEqual(len(verification), 1)
         self.assertIn("src/proof.ts", json.dumps(verification[0]["cache_context"]))  # the proof reached the verifier
@@ -492,11 +495,11 @@ class SchemaCoherenceTests(unittest.TestCase):
         model = UnitModel([answer(hypotheses=[HYP], gaps=["is the producer's shape known?"]), answer()])
         result = run(model, context=inventory(files=[record("src/a.ts", modified(["a"], ["b"]))], context_files=[]))
         self.assertIn("Question q1: no unique explicit resolution: unit 1: is the producer's shape known?",
-                      result["coverage_gaps"])
+                      result["review_notes"])
         verification = [c for c in model.calls if c["phase"] == "verification"][0]
         self.assertEqual(verification["payload"]["open_questions"], [{"question_id": "q1",
                          "question": "unit 1: is the producer's shape known?"}])
-        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["status"], "complete")
 
 
 class ReadDeadlineTests(unittest.TestCase):  # C2
@@ -523,7 +526,7 @@ class ReadDeadlineTests(unittest.TestCase):  # C2
                              deadline=420.0, now=170.0, step=60.0)
         result = run(model, context=inventory(files=[record("src/a.ts", modified(["a"], ["b"]))], context_files=[]),
                      read_file=numbered_file(50, log=log))
-        self.assertTrue(any("read of src/x.ts" in g and "(time)" in g for g in result["coverage_gaps"]))
+        self.assertTrue(any("read of src/x.ts" in g and "(time)" in g for g in result["review_notes"]))
         self.assertEqual([p for p, _, _ in log if p == "src/x.ts"], [])
         self.assertEqual(model.deadline, 420.0)
 

@@ -25,6 +25,23 @@ class SourceDeadlineTests(unittest.TestCase):
                 self.assertEqual(len(notes), 1)
                 self.assertTrue(notes[0].startswith("Context transport failure"))
 
+    def test_prefetch_workers_inherit_the_callers_source_deadline(self):
+        # Jungle Review's own review of publisher 2026-11-13.4: a context copied inside a worker thread has
+        # no deadline, so prefetched reads ran on the default 120 s timeout past the collection bound.
+        seen = []
+        def get(endpoint):
+            seen.append(context.source_timeout())
+            if "/git/trees/" in endpoint:
+                return {"tree": [{"path": f"f{n}.ts", "type": "blob", "mode": "100644", "sha": f"{n:040d}",
+                                  "size": 10} for n in range(4)]}
+            return {"content": ""}
+        context.clear_immutable_cache() if hasattr(context, "clear_immutable_cache") else None
+        with patch.object(context, "github_get_immutable", side_effect=get):
+            with context.source_deadline(seconds=30):
+                context._CommitReader("o/r", "c" * 40).prefetch([f"f{n}.ts" for n in range(4)])
+        self.assertTrue(seen)
+        self.assertTrue(all(timeout <= 30 for timeout in seen), seen)
+
     def test_tree_walk_uses_remaining_whole_operation_budget(self):
         now=[0.0];timeouts=[]
         def run(*_,**kwargs):

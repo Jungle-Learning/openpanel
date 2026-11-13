@@ -216,6 +216,7 @@ class Model:
         if self.anthropic and service_tier != "default":
             raise ValueError("Service tiers are an OpenAI option here")
         self.service_tier = service_tier
+        self.flex_fallback = False
         self.request_timeout = request_timeout
         self.deadline = deadline   # a clock() value; None means no deadline (offline tools and tests)
         self.clock = clock
@@ -283,10 +284,24 @@ class Model:
         _, input_ceiling = self.input_cost(body, self.headers())
         return input_ceiling + output_tokens * self.prices["output"]
 
-    def invoke(self, system: str, payload: dict, budget: Budget, phase: str,
-               max_output=7000, ceiling=None, cache_context=None, instruction=None, effort="medium",
-               minimum_output=1200) -> dict:
+    def invoke(self, system: str, payload: dict, budget: Budget, phase: str, **options) -> dict:
+        """One generation. A Flex capacity rejection (uncharged, settled at zero, ~1 s) is retried once on
+        the default tier for this call only; the next call tries Flex again, since its capacity comes and
+        goes within minutes. Every call already reserves standard rates, so the fallback cannot exceed the
+        budget; it only forgoes the Flex discount for that call."""
+        try:
+            return self._invoke_once(system, payload, budget, phase, service_tier=self.service_tier, **options)
+        except ResourceUnavailable:
+            if self.anthropic or self.service_tier != "flex":
+                raise
+            self.flex_fallback = True
+            return self._invoke_once(system, payload, budget, phase, service_tier="default", **options)
+
+    def _invoke_once(self, system: str, payload: dict, budget: Budget, phase: str,
+                     max_output=7000, ceiling=None, cache_context=None, instruction=None, effort="medium",
+                     minimum_output=1200, service_tier=None) -> dict:
         """Exactly one generation, including adaptive/medium reasoning in cap."""
+        service_tier = service_tier or self.service_tier
         if effort not in ("medium", "high"):
             raise ValueError("Unsupported reasoning effort")
         headers = self.headers()
@@ -354,13 +369,13 @@ class Model:
                 text = "".join(pieces)
             else:
                 body = {**count_body, "max_output_tokens": max_output,
-                        "reasoning": {"effort": effort}, "store": False, "service_tier": self.service_tier,
+                        "reasoning": {"effort": effort}, "store": False, "service_tier": service_tier,
                         "text": {"format": {"type": "json_object"}},
                         "prompt_cache_options": {"mode": "explicit", "ttl": "30m"}}
                 if cache_context is not None:
                     body["prompt_cache_key"] = hashlib.sha256((self.model + system + json.dumps(
                         cache_context, ensure_ascii=False, separators=(",", ":"))).encode()).hexdigest()
-                call["service_tier_requested"] = self.service_tier
+                call["service_tier_requested"] = service_tier
                 response = self.transport("https://api.openai.com/v1/responses", headers, body,
                                           timeout=generation_timeout)
                 if not isinstance(response, dict) or not isinstance(response.get("usage"), dict):
@@ -404,7 +419,7 @@ class Model:
                 text = openai_output_text(response.get("output", []))
             return parse_json(text)
         except ResourceUnavailable:
-            if not self.anthropic and self.service_tier == "flex":
+            if not self.anthropic and service_tier == "flex":
                 call["rejection"] = "resource_unavailable"
                 budget.settle(call, 0, {"rejected_http_status": 429, "error_code": "resource_unavailable"})
             raise

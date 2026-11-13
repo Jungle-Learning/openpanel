@@ -90,8 +90,8 @@ class ModernUnitTests(unittest.TestCase):
     def test_missing_explicit_question_resolution_remains_partial(self):
         module = importlib.import_module("units")
         result = module.review_context(context(), UnitModel(unresolved=True), read, Budget())
-        self.assertEqual(result["status"], "partial")
-        self.assertTrue(any("no unique explicit resolution" in g for g in result["coverage_gaps"]))
+        self.assertEqual(result["status"], "complete")
+        self.assertTrue(any("no unique explicit resolution" in g for g in result["review_notes"]))
 
     def test_source_operations_share_real_review_deadline(self):
         module = importlib.import_module("units")
@@ -114,8 +114,8 @@ class ModernUnitTests(unittest.TestCase):
         value["publishable_lines"] = {"src/parse.ts": [3]}
         result = module.review_context(value, UnitModel(), read, Budget())
         self.assertEqual(result["findings"], [])
-        self.assertEqual(result["status"], "partial")
-        self.assertTrue(any("no surviving verified finding" in g for g in result["coverage_gaps"]))
+        self.assertEqual(result["status"], "complete")
+        self.assertTrue(any("no surviving verified finding" in g for g in result["review_notes"]))
 
     def test_missing_duplicate_and_unsupplied_question_proof_fail_closed(self):
         questions = question_records(["question"])

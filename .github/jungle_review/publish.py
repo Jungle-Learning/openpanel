@@ -68,7 +68,7 @@ from prompts import VERSION as PROMPT_VERSION
 from incremental import (choose_checkpoint, incremental_context, make_checkpoint, parse_checkpoints,
                          runtime_identity)
 
-PUBLISHER_VERSION = "2026-11-13.3"
+PUBLISHER_VERSION = "2026-11-13.4"
 # Cohesive source units, outcome enumeration, bounded follow-ups, then verification.
 # The variant names the frozen development candidate; the inventory is still 450k.
 REVIEW_VARIANT = "D14-outcome-table"
@@ -715,7 +715,9 @@ def finding_comment(finding: dict, marker: str, text: Optional[str] = None) -> d
 
 
 def outcome_text(outcome: str, findings: int, reason: str = "", still_open: int = 0) -> tuple[str, str]:
-    """(commit status state, description). Only a complete review can be success."""
+    """(commit status state, description). A finished review is success, complete or partial: the reviewer
+    is advisory and a red status for a coverage gap only made authors rerun it. The receipt's outcome
+    (complete or partial) is what automated merge paths authenticate, and they accept complete only."""
     if outcome == "complete":
         if findings and still_open:
             return "success", f"Complete: {findings} new advisory finding(s); {still_open} earlier still open"
@@ -725,7 +727,8 @@ def outcome_text(outcome: str, findings: int, reason: str = "", still_open: int 
             return "success", f"Complete: no new issues; {still_open} earlier finding(s) still open"
         return "success", "Complete: no verified issues (advisory)"
     if outcome == "partial":
-        return "failure", "Partial review, not clean: see summary"
+        return "success", (f"Partial coverage: {findings} advisory finding(s); see summary" if findings
+                           else "Partial coverage: no verified issues; see summary")
     return "error", ("Review unavailable, not clean: " + reason)[:MAX_STATUS_DESCRIPTION]
 
 
@@ -840,23 +843,29 @@ class Publisher:
                 identity[key] = text(source)
         self.review_identity = identity
 
-    def save_summary(self, headline: str, details: list[str]):
-        lines = ["### Jungle Review", "", f"Commit `{self.head[:12]}`: {headline}", ""]
+    def save_summary(self, headline: str, details: list[str], notes: list[str] = ()):
+        # Short by design: the headline, then only what was NOT examined. The reviewer's own open
+        # questions, the scope and the cost ledger are folded away; nobody needs to act on them.
+        lines = ["### Jungle Review", "", f"`{self.head[:12]}`: {headline}"]
+        if details:
+            lines += [""] + [f"- {sanitize(line, 300)}" for line in details[:6]]
+        folded = []
         if self.review_start:
             mode = "Changes since the last completed review" if self.review_start != self.base else "Whole PR"
-            lines += [f"{mode}: `{self.review_start[:12]}..{self.head[:12]}`. "
-                      "Earlier PR changes and surrounding code are context for regression checks.", ""]
-        lines += [f"- {sanitize(line, 300)}" for line in details[:8]]
+            folded.append(f"{mode}: `{self.review_start[:12]}..{self.head[:12]}`, with earlier PR changes and "
+                          "surrounding code as context.")
         runner = getattr(self, "runner_reserved", 0)
-        lines += ["", f"Cost upper bound for this commit: model ${(self.spent - runner) / 1e6:.4f} plus "
-                      f"${runner / 1e6:.2f} of runner allowances reserved, of ${ALL_IN_CAP_MICRODOLLARS / 1e6:.2f} "
-                      f"all-in (each admitted attempt reserves ${RUNNER_ALLOWANCE_MICRODOLLARS / 1e6:.2f}, an expected "
-                      f"bound, not a billing guarantee; runs that end before a review starts are not included). "
-                      f"({self.identity_text()}, "
-                      f"publisher {PUBLISHER_VERSION}). The authoritative ledger is this commit's "
-                      f"\"{STATUS_CONTEXT}\" status history.",
-                  "Findings are advisory. A clean result is not a guarantee that the change is safe.", "",
-                  SUMMARY_MARKER]
+        folded.append(f"Cost upper bound: model ${(self.spent - runner) / 1e6:.4f} + "
+                      f"${runner / 1e6:.2f} runner allowance, of ${ALL_IN_CAP_MICRODOLLARS / 1e6:.2f} "
+                      f"({self.identity_text()}, publisher {PUBLISHER_VERSION}). Ledger: this commit's "
+                      f"\"{STATUS_CONTEXT}\" status history.")
+        if notes:
+            folded.append(f"Open questions the reviewer could not settle ({len(notes)}); no action needed:")
+            folded += [f"  - {sanitize(line, 300)}" for line in notes[:8]]
+        lines += ["", "<details><summary>Details</summary>", ""] + [f"- {line}" if not line.startswith("  ")
+                                                                     else line for line in folded]
+        lines += ["", "</details>", "", "Advisory: a clean result is not a guarantee that the change is safe.",
+                  "", SUMMARY_MARKER]
         if self.checkpoint_marker:
             lines += ["", self.checkpoint_marker]
         body = "\n".join(lines)
@@ -1000,26 +1009,31 @@ class Publisher:
             if still_open:
                 text += f" {still_open} earlier finding(s) are still open."
         elif outcome == "partial":
-            text = "PARTIAL review: not a clean result."
+            text = (f"partial coverage, {findings} advisory finding(s) posted inline. Not examined:" if findings
+                    else "partial coverage, no verified issues in what was examined. Not examined:")
         else:
-            text = "review UNAVAILABLE: not a clean result."
+            text = ("review unavailable: not a clean result. Rerun it from Actions → Jungle Review → "
+                    "Run workflow (same budget, no double charge).")
         return text, list(gaps)
 
     def publish(self, result: dict, prior: PriorState) -> int:
         outcome = result.get("status")
         if outcome not in ("complete", "partial", "unavailable"):
             outcome = "unavailable"
-        gaps = [str(g) for g in result.get("coverage_gaps", [])][:6]
+        all_gaps = [str(g) for g in result.get("coverage_gaps", [])]
+        gaps = all_gaps[:6]
+        notes = [str(n) for n in result.get("review_notes", [])]
         findings = [f for f in result.get("findings", []) if outcome != "unavailable"][:MAX_PUBLISHED_FINDINGS]
         new = [f for f in findings if f.get("fingerprint") not in prior.open_fingerprints]
         repeated = len(findings) - len(new)
         if repeated:
-            gaps = gaps + [f"{repeated} finding(s) already open from an earlier review were not repeated"]
+            notes = notes + [f"{repeated} finding(s) already open from an earlier review were not repeated"]
         # Every trusted open finding stays outstanding until a person resolves its thread, whether or
         # not this review repeated it: a model omitting an issue never erases it from the receipt.
         still_open = len(prior.open_fingerprints)
         if outcome == "unavailable":
-            return self.unavailable(gaps[-1] if gaps else "Reviewer unavailable", gaps)
+            # The cause is appended last; the first gaps are only what the review had reached.
+            return self.unavailable(all_gaps[-1] if all_gaps else "Reviewer unavailable", all_gaps[-1:])
         if not self.still_current():
             self.save_summary("superseded by a newer commit before publication; not published.", [])
             return 0
@@ -1029,7 +1043,8 @@ class Publisher:
         if published and outcome == "complete":
             self.checkpoint_marker = make_checkpoint(self.repository, self.number, self.head, self.base,
                 self.base_ref, self.release, self.run_id, self.review_start or self.base, self.signer)
-        self.save_summary(*self.headline(outcome, len(new), gaps, still_open))
+        self.save_summary(*self.headline(outcome, len(new), gaps if outcome == "partial" else [], still_open),
+                          notes=notes)
         return 0
 
     def post_review(self, outcome: str, findings: list[dict], result: dict):
@@ -1159,6 +1174,7 @@ def review_diagnostics(result: dict) -> dict:
                 else "malformed",
                 "retryable": result.get("retryable") is True,
                 "findings": count(result.get("findings")), "coverage_gaps": count(result.get("coverage_gaps")),
+                "review_notes": count(result.get("review_notes")),
                 "discovery_level": number(result.get("discovery_level")),
                 "investigation_rounds": number(result.get("investigation_rounds")),
                 "verified_items": number(result.get("verified_items")),

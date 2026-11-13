@@ -450,6 +450,19 @@ def budget_fields(budget: Budget) -> dict:
     return {"budget": report, "model_cap_usd": report["model_cap_usd"]}
 
 
+UNVERIFIED_PREFIX = "suspected defect not verified"
+# Gap texts that mean changed production code (or a suspected defect in it) was not examined. Deferred
+# units (tests, fixtures, data, docs next to production code) not audited are review notes, not gaps. A
+# suspected defect left out of the final verification is unexamined whatever the reason.
+_UNEXAMINED_GAP = re.compile(r"^(?:primary unit \d+ (?:not audited|output unusable|returned an unusable result) \(|"
+                             r"changed file has no patch in the inventory|candidate not carried to verification \(|"
+                             + re.escape(UNVERIFIED_PREFIX) + r" \()")
+
+
+def is_unexamined_gap(gap: str) -> bool:
+    return bool(_UNEXAMINED_GAP.match(gap))
+
+
 def named(prefix: str, paths: list[str]) -> list[str]:
     out = [f"{prefix}: {p}" for p in paths[:MAX_NAMED_GAPS]]
     if len(paths) > MAX_NAMED_GAPS:
@@ -475,8 +488,17 @@ def review_units(context: dict, model: Model, read_file, budget: Budget | None =
     coverage = inventory.get("coverage", {})
     scope_notes = [*coverage.get("info", []), *coverage.get("notes", [])]
     coverage_gaps = list(coverage.get("notes", [])) if not coverage.get("complete", False) else []
-    if coverage.get("omitted_files"):
-        coverage_gaps.append(f"{len(coverage['omitted_files'])} changed file(s) omitted from the review inventory")
+    # Changed code missing from the inventory is unexamined, unlike the reviewer's own open questions. A
+    # test, doc or data file GitHub sent no patch for (often a large generated fixture or snapshot) is a note.
+    omitted = coverage.get("omitted_files") or []
+    omitted_code = [o for o in omitted if route_kind(str(o.get("path", ""))) in PRIMARY_KINDS]
+    inventory_gaps = {note for note in coverage_gaps if note.startswith("compare API lists")}
+    if omitted_code:
+        coverage_gaps.append(f"{len(omitted_code)} changed file(s) omitted from the review inventory")
+        inventory_gaps.add(coverage_gaps[-1])
+    if len(omitted) > len(omitted_code):
+        coverage_gaps.append(f"{len(omitted) - len(omitted_code)} changed test, doc or data file(s) omitted from "
+                             "the review inventory")
     routing = route(inventory)
     units = routing["units"]
     units_log = [{"index": n + 1, "role": routing["roles"][n], "files": u, "kinds": sorted({route_kind(p) for p in u}),
@@ -797,8 +819,8 @@ def review_units(context: dict, model: Model, read_file, budget: Budget | None =
                 if not settled_output_failure(error, calls_before):
                     raise
                 units_log[index]["result_problem"] = str(error)[:120]
-                coverage_gaps.extend(named(f"unit {number} output unusable ({str(error)[:80]}); not reviewed",
-                                           units[index]))
+                coverage_gaps.extend(named(f"{routing['roles'][index]} unit {number} output unusable "
+                                           f"({str(error)[:80]}); not reviewed", units[index]))
                 return
             finally:
                 if len(budget.calls) > calls_before:
@@ -807,8 +829,8 @@ def review_units(context: dict, model: Model, read_file, budget: Budget | None =
             problem = unit_result_problem(result)
             if problem:
                 units_log[index]["result_problem"] = problem
-                coverage_gaps.extend(named(f"unit {number} returned an unusable result ({problem}); not reviewed",
-                                           units[index]))
+                coverage_gaps.extend(named(f"{routing['roles'][index]} unit {number} returned an unusable result "
+                                           f"({problem}); not reviewed", units[index]))
                 return
             units_log[index]["audited"] = True
             results[index] = result
@@ -941,7 +963,8 @@ def review_units(context: dict, model: Model, read_file, budget: Budget | None =
                 "path": p, "kind": "second-look", "trigger": "its unit audit raised no provisional candidate",
                 "mechanism": "independent second look at the audited change",
                 "check": "report only a concrete, reachable defect visible in this code"} for p in audited_files]])
-            coverage_gaps.extend(look_notes)
+            # Overflow of the synthetic second-look list names audited files, not suspected defects: a note.
+            scope_notes.extend(look_notes)
         # Controller-owned candidate IDs, assigned once before the final preflight; trimming keeps them.
         items = identify_candidates(items)
         # M3: collector snippets already shown to (or left out of) an audited unit are offered to the final
@@ -1034,17 +1057,31 @@ def review_units(context: dict, model: Model, read_file, budget: Budget | None =
                             raise ReviewUnavailable("Temporary context failure; stopped before further generation")
             except BudgetExceeded:
                 if not second_look:
-                    raise  # a real candidate's mandatory verification cannot fit: fail closed
-                diagnostics["verification"] = "not run: the second look did not fit the remaining budget"
-                scope_notes.append("unit audits raised no candidate; the optional second-look verification did "
-                                   "not fit the remaining budget")
+                    # The audits already ran and were paid for: keep them. Unverified candidates are never
+                    # published; each is named as an unverified gap, which makes this review partial.
+                    diagnostics["verification"] = "not run: the candidates did not fit the remaining budget"
+                    coverage_gaps.extend(f"{UNVERIFIED_PREFIX} (budget): {describe(item)}" for item in items)
+                else:
+                    diagnostics["verification"] = "not run: the second look did not fit the remaining budget"
+                    scope_notes.append("unit audits raised no candidate; the optional second-look verification "
+                                       "did not fit the remaining budget")
             else:
-                final = verifier.invoke(POLICY, final_payload, budget, "verification",
-                                        max_output=focused.VERIFICATION_MAX_OUTPUT,
-                                        minimum_output=focused.VERIFICATION_MIN_OUTPUT, cache_context=package,
-                                        instruction=final_instruction, effort=effort)
-                diagnostics["verification"] = "second look" if second_look else "candidates"
-                stages.append({"phase": "verification", "second_look": second_look, "result": final})
+                try:
+                    final = verifier.invoke(POLICY, final_payload, budget, "verification",
+                                            max_output=focused.VERIFICATION_MAX_OUTPUT,
+                                            minimum_output=focused.VERIFICATION_MIN_OUTPUT, cache_context=package,
+                                            instruction=final_instruction, effort=effort)
+                except (BudgetExceeded, DeadlineReached) as error:
+                    # Same rule as above: a verification that cannot be sent keeps the paid audits.
+                    reason = "time" if isinstance(error, DeadlineReached) else "budget"
+                    diagnostics["verification"] = f"not run: {reason}"
+                    if second_look:
+                        scope_notes.append(f"the optional second-look verification was not run ({reason})")
+                    else:
+                        coverage_gaps.extend(f"{UNVERIFIED_PREFIX} ({reason}): {describe(item)}" for item in items)
+                else:
+                    diagnostics["verification"] = "second look" if second_look else "candidates"
+                    stages.append({"phase": "verification", "second_look": second_look, "result": final})
         findings, disposition_records = [], []
         if final is not None:
             findings, invalid = validated_findings(final, inventory)
@@ -1092,7 +1129,10 @@ def review_units(context: dict, model: Model, read_file, budget: Budget | None =
         coverage_gaps.extend(doc_notes)
         # 6. Honest coverage: every file outside an audited unit is named; deletions cannot anchor findings.
         audited = {p for i in results for p in units[i]}
-        coverage_gaps.extend(named("changed file has no patch in the inventory (not reviewed)", routing["unreviewable"]))
+        unreviewable_code = [p for p in routing["unreviewable"] if route_kind(p) in PRIMARY_KINDS]
+        coverage_gaps.extend(named("changed file has no patch in the inventory (not reviewed)", unreviewable_code))
+        coverage_gaps.extend(named("changed test, doc or data file has no patch in the inventory (not reviewed)",
+                                   [p for p in routing["unreviewable"] if p not in unreviewable_code]))
         for record in inventory.get("files", []):
             if record["path"] in audited and not numbered_patch(record["patch"])[1]:
                 coverage_gaps.append(f"{record['path']}: no head line is shown (deleted or deletion-only patch); "
@@ -1104,9 +1144,15 @@ def review_units(context: dict, model: Model, read_file, budget: Budget | None =
                                 "snippets_offered": len(snippet_entries)}
         diagnostics["stopped_by_time_at_unit"] = out_of_time[0] if out_of_time else None
         coverage_gaps = list(dict.fromkeys(coverage_gaps))
-        complete = bool(coverage.get("complete", False)) and not coverage_gaps
+        # Only changed code that was never examined (or suspected defects never verified) makes a review
+        # partial. The reviewer's open questions and undecided branches are review notes: they are
+        # reported, but a review that examined every changed primary file is complete.
+        unexamined = [gap for gap in coverage_gaps if gap in inventory_gaps or is_unexamined_gap(gap)]
+        review_notes = [gap for gap in coverage_gaps if gap not in unexamined]
+        complete = not unexamined
         return {**base, "status": "complete" if complete else "partial", "findings": findings, "retryable": False,
-                "coverage_gaps": coverage_gaps, "scope_notes": scope_notes, "units": diagnostics,
+                "coverage_gaps": unexamined, "review_notes": review_notes, "scope_notes": scope_notes,
+                "units": diagnostics,
                 "documentation": {"catalog": sorted(registry.records), "unavailable": registry.unavailable,
                                   "config_error": registry.config_error, "requests": doc_log, "supplied": doc_ids,
                                   "in_final_package": [d["doc"] for d in focused.describe_evidence(
