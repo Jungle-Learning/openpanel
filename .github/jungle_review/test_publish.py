@@ -1042,10 +1042,12 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotRegex(self.text, r"\n  pull_request:")
         for unsafe in ("head.sha", "head.ref", "head_ref", "gh pr checkout", "npm ", "pip install"):
             self.assertNotIn(unsafe, self.text)
-        self.assertIn("ref: ${{ github.sha }}", self.text)
-        self.assertIn("persist-credentials: false", self.text)
+        self.assertIn('fetch --no-tags --depth=1 origin "$GITHUB_SHA"', self.text)
+        self.assertIn('test "$(git rev-parse HEAD)" = "$GITHUB_SHA"', self.text)
+        self.assertIn('unset GH_TOKEN', self.text)
+        self.assertNotRegex(self.text, r"git config .*credential")
         uses = [l for l in self.text.splitlines() if re.match(r"\s*(- )?uses:", l)]
-        self.assertEqual(len(uses), 2)
+        self.assertEqual(len(uses), 1)
         for line in uses:
             self.assertRegex(line, r"uses: [\w./-]+@[0-9a-f]{40}( #.*)?$")
 

@@ -1,13 +1,13 @@
 {
   "schema": 2,
-  "release_sha256": "0f11425b35550d5d04c64c011059acaa8788d1a8d9ed1acae94c26fde994490c",
+  "release_sha256": "be9d47152966082fcbe350ff0d5b38d10aa7b55b1f46d765326a83e279e745f1",
   "files": {
     ".github/jungle_review/README.md": {
       "sha256": "0f04ae3b16cd27cff73a8ead4453df8314d9b028c6df03a3e18ffa4639449b2c",
       "mode": "100644"
     },
     ".github/jungle_review/context.py": {
-      "sha256": "b750696c309a4881720d37d8fb24e8b23682e6f9c162dc2b4321ed9388286e5f",
+      "sha256": "69caf036dec598b1a233ad6722370ee1b5a8c7b87b75d6dad503f4ae74b2694e",
       "mode": "100644"
     },
     ".github/jungle_review/dispositions.py": {
@@ -55,7 +55,7 @@
       "mode": "100644"
     },
     ".github/jungle_review/focused.py": {
-      "sha256": "781da56bf8780a457ea91541838a6b6e5cdadc1ced7a6518b8e4d74ef4b0b370",
+      "sha256": "8d66dda5b7e3a5d907fce51715b65254aa7bfde05ac701a5ed285d70cb8093b0",
       "mode": "100644"
     },
     ".github/jungle_review/incremental.py": {
@@ -75,7 +75,7 @@
       "mode": "100644"
     },
     ".github/jungle_review/publish.py": {
-      "sha256": "57d96c35a1c2300ce8a88395c0ce72bb89341e244cdb4188ea27d22aa55ae227",
+      "sha256": "b45f8da625ab08d1090d7ed4b333908abed4328f5e57a0abe5063b783f4b870f",
       "mode": "100644"
     },
     ".github/jungle_review/questions.py": {
@@ -83,19 +83,23 @@
       "mode": "100644"
     },
     ".github/jungle_review/review.py": {
-      "sha256": "53208c8ee1f0da19e130ce09853cd90ee07517806009916a691eb486893b88ab",
+      "sha256": "b44f22922b61f9f717e42f3ed973b9defcc96668a449a28372f2970e430fe775",
       "mode": "100644"
     },
     ".github/jungle_review/test_balanced.py": {
       "sha256": "93c8aa85451635be87be1cc55389141da0d43a0926d563e926eaf5966d4f6d8b",
       "mode": "100644"
     },
+    ".github/jungle_review/test_checkout.py": {
+      "sha256": "8256c7409e882f8ddf694058a4e5a6bf9a4087676e67943ee78339ab5e873f0e",
+      "mode": "100644"
+    },
     ".github/jungle_review/test_claim_identity.py": {
-      "sha256": "acfaae575764512d8f640f02eefde0f217d5e6e5a896298e6d94a73a85a66966",
+      "sha256": "0b1ed39d7960787f20d446bd26a58d64bf1bfa19428e08f996bf3187d5d16e85",
       "mode": "100644"
     },
     ".github/jungle_review/test_context.py": {
-      "sha256": "cd57330ff1c80d894985ac5fe4dbe800a2aca160cc862d9b6b3df4e75bda30e4",
+      "sha256": "b4506ac2ddf9fdfe7e62be39291b7299120c36e34b0f9508de90f6381d76268e",
       "mode": "100644"
     },
     ".github/jungle_review/test_dedup_schema.py": {
@@ -119,7 +123,7 @@
       "mode": "100644"
     },
     ".github/jungle_review/test_focused.py": {
-      "sha256": "d241a496d48db34efbb2b4fec5bfb912cfcc86206ad70777c57a6b88cd7b21ac",
+      "sha256": "129c068d625964fb93f77fb79635c8b0c26ac97f808a497a4fd0a30cc331d1f6",
       "mode": "100644"
     },
     ".github/jungle_review/test_incremental.py": {
@@ -139,7 +143,7 @@
       "mode": "100644"
     },
     ".github/jungle_review/test_publish.py": {
-      "sha256": "9379ef58d086447953eb026796cd8d9b584907eea1ec69aa276301347a50ec66",
+      "sha256": "20ffeb5890d57e3ee9d7d73a84986348b5f8a5686b061c2168c76a7859c18afe",
       "mode": "100644"
     },
     ".github/jungle_review/test_publish_focused.py": {
@@ -147,7 +151,7 @@
       "mode": "100644"
     },
     ".github/jungle_review/test_review.py": {
-      "sha256": "38cdb62b58e9ac929f9965aaf2e689b05e6e232006d067cf19bae5632860c719",
+      "sha256": "7fbe24d35f09746ae68cd3c5a845e2fe8ec621ce349dc0c093fccbd92a9f511d",
       "mode": "100644"
     },
     ".github/jungle_review/test_runner_admission.py": {
@@ -159,7 +163,7 @@
       "mode": "100644"
     },
     ".github/jungle_review/test_selected.py": {
-      "sha256": "34798dd779344acd4b2bc228887e802f5e13b987955d5f51e9947ec1a4d26ef0",
+      "sha256": "8a3488240fd22ec873293a98fb8e96d28e2460eda61077ef0c971c5f4ad5e989",
       "mode": "100644"
     },
     ".github/jungle_review/test_service_tier.py": {
@@ -167,7 +171,7 @@
       "mode": "100644"
     },
     ".github/jungle_review/test_source_deadline.py": {
-      "sha256": "2820d4a712886adae0c2f118902ff9847a6080307c999c167106aae30840eda5",
+      "sha256": "d9788866736868377c5bf5a27e226ea05bdd1d3b08a83a10e24ce8cf31e630d1",
       "mode": "100644"
     },
     ".github/jungle_review/test_units.py": {
@@ -179,16 +183,16 @@
       "mode": "100644"
     },
     ".github/workflows/jungle-review-tests.yml": {
-      "sha256": "5e14aace3dbde33252735c1711d7771f5420fa5fedf283f4b20f9253230638d6",
+      "sha256": "7020487ed50031f96f63526c0aebe7a78a6a19674437ff1335a9710f2eedfb5f",
       "mode": "100644"
     },
     ".github/workflows/jungle-review.yml": {
-      "sha256": "10eb1caaf9a205d51aebc1024c9086f2f82e8e9b9a8cdc43d2fc6dc131b4a14c",
+      "sha256": "d7325cc76cea7780a135a08cc2817e7e631f0cd36890e5e48b608a0641eddbfe",
       "mode": "100644"
     }
   },
   "source": {
     "repository": "Jungle-Learning/jungle-web",
-    "commit": "fe73d0b02870d08944ba5cf35a36149aa1903d5e"
+    "commit": "07bc14b0949c00b1ab84cb0330c60c5524f29e1b"
   }
 }

@@ -21,7 +21,8 @@ def fingerprint(finding: dict, scope: dict) -> str:
     publisher match on an open identity means either an exact repeat of that claim on that scope or a prior
     identifier the model explicitly reused and validated_findings accepted. Nothing here compares titles or
     lines across claims. Earlier signed identifiers stay valid: they are only looked up, never recomputed."""
-    head, base = scope.get("head_sha"), scope.get("base_sha")
+    head = scope.get("head_sha")
+    base = scope.get("merge_base_sha", scope.get("base_sha"))
     if not (isinstance(head, str) and SCOPE_SHA.fullmatch(head) and isinstance(base, str) and SCOPE_SHA.fullmatch(base)):
         raise ReviewUnavailable("Review scope missing or malformed; findings cannot be identified")
     canonical = json.dumps({"identity": "jungle-review-claim-v1", "head": head, "base": base,
@@ -59,7 +60,7 @@ def numbered_patch(patch: str) -> tuple[str, set[int]]:
             lines.append(f"L{old} -{row[1:]}")
             old += 1
             old_left -= 1
-        elif row.startswith(" ") and old_left and new_left:
+        elif (row.startswith(" ") or row == "") and old_left and new_left:
             lines.append(f"R{new}  {row[1:]}")
             anchors.add(new)
             old += 1

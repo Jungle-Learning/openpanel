@@ -952,6 +952,13 @@ def collect_context(repository: str, number: int, head_sha: Optional[str] = None
                              character_limit: Optional[int] = None) -> tuple[bool, bool]:
         """Adds line-numbered excerpts. Returns (anything_included, truncated)."""
         lines = source_lines(text)
+        if not lines:
+            if not budget.take_whole(""):
+                return False, True
+            context_files.append({"path": path, "ref": resolved_head_sha, "content": "",
+                                  "start_line": 1, "end_line": 0, "reason": reason,
+                                  "line_numbered": True, "truncated": False})
+            return True, False
         spent = 0
         anything_included = False
         for start_line, end_line in windows:

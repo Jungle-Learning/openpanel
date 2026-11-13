@@ -186,6 +186,18 @@ class FakeGitHubTestCase(unittest.TestCase):
 
 
 class HistoricalIsolationTests(FakeGitHubTestCase):
+    def test_empty_imported_helper_is_visible_without_a_false_budget_omission(self):
+        files = {**BASE_FILES, "src/empty.ts": (FILE_MODE, "")}
+        base = self.github.commit("empty-helper-base", self.shas["base"], files)
+        files["src/app.ts"] = (FILE_MODE, 'import "./empty";\nexport const value = 1;\n')
+        head = self.github.commit("empty-helper-head", base, files)
+        result = context.collect_context(REPOSITORY, NUMBER, head_sha=head, base_sha=base)
+        entries = [item for item in result["context_files"] if item["path"] == "src/empty.ts"]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual((entries[0]["content"], entries[0]["start_line"], entries[0]["end_line"]), ("", 1, 0))
+        self.assertFalse(entries[0]["truncated"])
+        self.assertFalse(any("src/empty.ts" in note and "budget" in note for note in result["coverage"]["notes"]))
+
     def test_replay_sees_only_the_replayed_commit(self):
         result = self.historical_context()
         serialized = json.dumps(result)

@@ -269,7 +269,7 @@ def hunks(patch: str) -> list[dict]:
             current["rows"].append(f"L{old} -{row[1:]}")
             current["map"].append((old, None))
             old += 1
-        elif row.startswith(" "):
+        elif row.startswith(" ") or row == "":
             current["rows"].append(f"R{new}  {row[1:]}")
             current["map"].append((old, new))
             old += 1

@@ -3,6 +3,7 @@ import importlib
 import json
 import time
 import unittest
+from unittest.mock import patch
 
 from questions import audit_questions, question_records
 from test_focused import inventory
@@ -62,6 +63,16 @@ def read(repository, sha, path, start, end):
 
 
 class ModernUnitTests(unittest.TestCase):
+    def test_source_deadline_stops_before_further_paid_calls_and_is_retryable(self):
+        module = importlib.import_module("units")
+        model = UnitModel()
+        with patch.object(source._CommitReader, "read_text", side_effect=source.SourceDeadlineReached("expired")):
+            result = module.review_context(context(), model, source.read_context_file, Budget())
+        self.assertEqual(result["status"], "unavailable")
+        self.assertTrue(result["retryable"])
+        self.assertEqual([call["phase"] for call in model.calls], ["discovery"])
+        self.assertTrue(any(note.startswith("Context transport failure") for note in result["retrieval_notes"]))
+
     def test_all_frozen_variants_preserve_verified_findings_and_incremental_context(self):
         for index in (14,):
             with self.subTest(variant=index):

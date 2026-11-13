@@ -8,6 +8,23 @@ import context
 
 
 class SourceDeadlineTests(unittest.TestCase):
+    def test_deadlines_from_read_search_and_path_discovery_are_transport_failures(self):
+        from review import retrieve
+        from test_selected import context as inventory
+        requests = [
+            {"kind": "read", "path": "src/parse.ts", "ref": "head", "start": 1, "end": 3},
+            {"kind": "search", "path": "src/parse.ts", "ref": "head", "query": "parse"},
+            {"kind": "find_path", "ref": "head", "query": "parse"},
+        ]
+        for request in requests:
+            with self.subTest(kind=request["kind"]), \
+                    patch.object(context._CommitReader, "read_text", side_effect=context.SourceDeadlineReached("expired")), \
+                    patch.object(context, "github_get_immutable", side_effect=context.SourceDeadlineReached("expired")):
+                extra, notes = retrieve({"requests": [request]}, inventory(), context.read_context_file)
+                self.assertEqual(extra[0]["result"]["error"], "read failed (SourceDeadlineReached)")
+                self.assertEqual(len(notes), 1)
+                self.assertTrue(notes[0].startswith("Context transport failure"))
+
     def test_tree_walk_uses_remaining_whole_operation_budget(self):
         now=[0.0];timeouts=[]
         def run(*_,**kwargs):

@@ -21,6 +21,14 @@ OTHER_MECHANISM = dict(CLAIM, body="An empty 204 response leaves the payload emp
 
 
 class ClaimIdentityTests(unittest.TestCase):
+    def test_incremental_identity_uses_the_pr_merge_base_not_the_checkpoint(self):
+        incremental = {**SCOPE, "base_sha": "c" * 40, "merge_base_sha": SCOPE["base_sha"]}
+        self.assertEqual(fingerprint(CLAIM, incremental), fingerprint(CLAIM, SCOPE))
+        self.assertNotEqual(fingerprint(CLAIM, {**incremental, "merge_base_sha": "d" * 40}),
+                            fingerprint(CLAIM, SCOPE))
+        with self.assertRaises(ReviewUnavailable):
+            fingerprint(CLAIM, {**incremental, "merge_base_sha": None})
+
     def test_the_identity_is_deterministic_and_binds_every_claim_field_and_the_scope(self):
         identity = fingerprint(CLAIM, SCOPE)
         self.assertRegex(identity, r"^[0-9a-f]{24}$")

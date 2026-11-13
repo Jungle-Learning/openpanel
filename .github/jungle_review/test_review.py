@@ -245,6 +245,13 @@ class ReviewTests(unittest.TestCase):
 
 
 class LineNumberingTests(unittest.TestCase):
+    def test_empty_context_line_consumes_counts_before_the_next_hunk(self):
+        patch = "@@ -1,4 +1,4 @@\n before\n\n-old\n+new\n after\n@@ -10 +10 @@\n-later\n+changed\n"
+        text, anchors = numbered_patch(patch)
+        self.assertEqual(anchors, {1, 2, 3, 4, 10})
+        self.assertIn("R2  \nL3 -old\nR3 +new\nR4  after", text)
+        self.assertIn("L10 -later\nR10 +changed", text)
+
     def test_numbered_patch_keeps_git_coordinates_across_unicode_separators(self):
         patch = "@@ -1,2 +1,3 @@\n a\fb\n+c\u2028d\n e\x85f\n"
         text, anchors = numbered_patch(patch)

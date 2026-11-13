@@ -179,6 +179,15 @@ class FocusedTests(unittest.TestCase):
         self.assertEqual(focused.base_line_for(APP_PATCH, 20), 19)  # between hunks: shifted by +1
         self.assertEqual(focused.base_line_for(APP_PATCH, 41), 40)
 
+    def test_empty_context_rows_keep_evidence_and_line_mapping_aligned(self):
+        patch = "@@ -1,4 +1,4 @@\n before\n\n-old\n+new\n after\n@@ -10 +10 @@\n-later\n+changed\n"
+        first, second = focused.hunks(patch)
+        self.assertEqual(first["map"], [(1, 1), (2, 2), (3, None), (None, 3), (4, 4)])
+        self.assertIn("R3 +new", first["rows"])
+        self.assertIn("R10 +changed", second["rows"])
+        self.assertEqual(focused.base_line_for(patch, 4), 4)
+        self.assertEqual(focused.head_line_for_base(patch, 4), 4)
+
     def test_added_line_maps_to_the_base_line_before_it_not_later_deletions(self):
         patch = "@@ -1,5 +1,4 @@\n a\n+x\n b\n-c\n-d\n e\n"
         self.assertEqual(focused.base_line_for(patch, 2), 1)   # +x sits after base line 1 (a)
