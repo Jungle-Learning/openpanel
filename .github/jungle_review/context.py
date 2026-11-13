@@ -1333,7 +1333,7 @@ def read_context_file(repository: str, sha: str, path: str, start_line: int = 1,
     text, redacted = redact_secrets(text)
     lines = source_lines(text)
     total_lines = len(lines)
-    if start_line > max(total_lines, 1):
+    if start_line > total_lines:
         return {**result, "start_line": start_line, "end_line": start_line - 1, "total_lines": total_lines,
                 "content": "", "truncated": False}
     end_line = min(end_line, total_lines)

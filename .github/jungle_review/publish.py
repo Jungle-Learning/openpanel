@@ -68,7 +68,7 @@ from prompts import VERSION as PROMPT_VERSION
 from incremental import (choose_checkpoint, incremental_context, make_checkpoint, parse_checkpoints,
                          runtime_identity)
 
-PUBLISHER_VERSION = "2026-11-13.1"
+PUBLISHER_VERSION = "2026-11-13.2"
 # Cohesive source units, outcome enumeration, bounded follow-ups, then verification.
 # The variant names the frozen development candidate; the inventory is still 450k.
 REVIEW_VARIANT = "D14-outcome-table"

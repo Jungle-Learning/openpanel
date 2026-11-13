@@ -367,6 +367,18 @@ class ScopeAndTruncationTests(FakeGitHubTestCase):
 
 
 class ReadContextFileTests(FakeGitHubTestCase):
+    def test_empty_file_returns_an_empty_range_without_indexing_a_missing_line(self):
+        files = {**BASE_FILES, "src/__init__.py": (FILE_MODE, "")}
+        head = self.github.commit("empty-module", self.shas["base"], files)
+        for start, end in ((1, 180), (12, 30)):
+            with self.subTest(start=start):
+                result = context.read_context_file(REPOSITORY, head, "src/__init__.py", start, end)
+                self.assertNotIn("error", result)
+                self.assertEqual(result["content"], "")
+                self.assertEqual(result["total_lines"], 0)
+                self.assertEqual((result["start_line"], result["end_line"]), (start, start - 1))
+                self.assertFalse(result["truncated"])
+
     def test_traversal_and_unsafe_paths_refused_without_requests(self):
         for path in ("../outside.ts", "/etc/passwd", "src/../.env", ".git/config", "src/.git/hooks/pre-commit",
                      "src\\app.ts", "", "src//app.ts", "./src/app.ts", "src/app.ts\x00", ".env", "package-lock.json"):
