@@ -1,0 +1,5 @@
+Webhook endpoints might occasionally receive the same event more than once. You can guard against duplicated event receipts by logging the event IDs you’ve processed, and then not processing already-logged events.
+
+Stripe doesn’t guarantee the delivery of events in the order that they’re generated. For example, creating a subscription might generate the following events:
+
+Stripe attempts to deliver events to your destination for up to three days with an exponential back off in live mode. View when the next retry will occur, if applicable, in your event destination’s Event deliveries tab. We retry event deliveries created in a sandbox three times over the course of a few hours. If your destination has been disabled or deleted when we attempt a retry, we prevent future retries of that event. However, if you disable and then re-enable the event destination before we’re able to retry, you still see future retry attempts.

@@ -1,0 +1,3 @@
+All Modal Functions are subject to preemption by default. If a preemption event interrupts a running Function, Modal will gracefully terminate the Function and restart it on the same input.
+
+Ensure preemptible operations are safely retryable (ie. idempotent).

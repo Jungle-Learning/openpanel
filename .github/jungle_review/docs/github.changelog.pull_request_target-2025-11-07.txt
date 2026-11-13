@@ -1,0 +1,7 @@
+The workflow file and checkout commit will always be taken from the repository’s default branch, regardless of the pull request’s base branch. This prevents outdated—and potentially vulnerable—workflows on other branches within the repository from being executed in these events.
+
+These changes will take effect on 12/8/2025. They aim to reduce security critical edge cases in how these events operate on user-controlled branches that may result in unexpected execution of user-supplied workflow code or execution with environment secrets.
+
+For pull_request_target, environment rules evaluate against the default branch. This is consistent with the updated GITHUB_REF and ensures policy checks occur against a trusted ref.
+
+For pull_request, pull_request_review, and pull_request_review_comment, environment rules evaluate against refs/pull/number/merge. This matches the merge commit context those events use during execution.

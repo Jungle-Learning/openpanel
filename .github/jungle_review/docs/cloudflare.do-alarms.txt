@@ -1,0 +1,3 @@
+Alarms have guaranteed at-least-once execution and are retried automatically when the alarm() handler throws.
+
+The alarm() handler has guaranteed at-least-once execution and will be retried upon failure using exponential backoff, starting at 2 second delays for up to 6 retries. This only applies to the most recent setAlarm() call. Retries will be performed if the method fails with an uncaught exception.
