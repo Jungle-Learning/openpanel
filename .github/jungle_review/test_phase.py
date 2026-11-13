@@ -215,11 +215,11 @@ class UnitsIntegrationTests(unittest.TestCase):
 
         model = Priced([answer(hypotheses=[HYP], requests=requests)] + [answer()] * 5)
         result = units.review_units(inv, model, numbered_file(1000))
-        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["status"], "complete")
         audit = result["audit"]
         self.assertEqual([(d["path"], d["cause"], d["ranges"]) for d in audit["excluded_evidence"]],
                          [("src/helper.py", "final budget (exact fit)", [[1, 150]])])
-        self.assertTrue(any("src/helper.py" in gap and "lines 1-150" in gap for gap in result["coverage_gaps"]))
+        self.assertTrue(any("src/helper.py" in gap and "lines 1-150" in gap for gap in result["review_notes"]))
         self.assertTrue(any(d.get("path") == "src/tiny.py" for d in audit["admitted_evidence"]))
 
 

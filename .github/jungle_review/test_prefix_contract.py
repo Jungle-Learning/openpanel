@@ -50,9 +50,29 @@ class PrefixTests(unittest.TestCase):
         c=two.prepare("system",{},"contracts",{"code":"x"})
         self.assertEqual(a["input"][0],b["input"][0]);self.assertNotEqual(a["input"][0],c["input"][0])
     def test_definitive_uncharged_resource_rejection_refunds_reservation(self):
-        send,_=self.transport(error=p.ResourceUnavailable("no resource"));budget=p.Budget()
+        # Flex capacity rejections are uncharged and retried once on the default tier. When that also fails,
+        # the Flex attempt is refunded and the default-tier attempt keeps its reservation (unknown billing).
+        send,calls=self.transport(error=p.ResourceUnavailable("no resource"));budget=p.Budget()
         with self.assertRaises(p.ResourceUnavailable):p.Model("gpt-6.1-sol",send).invoke("system",{},budget,"discovery")
-        self.assertEqual(budget.spent,0);self.assertTrue(budget.report()["billing_complete"])
+        self.assertEqual([c.get("service_tier") for c in calls if "service_tier" in c],["flex","default"])
+        self.assertEqual(budget.calls[0]["actual_usd"] if "actual_usd" in budget.calls[0] else budget.calls[0].get("actual"),0)
+    def test_flex_capacity_rejection_falls_back_to_the_default_tier(self):
+        rejected=[True]
+        def send(url,headers,body,timeout=180):
+            if url.endswith("input_tokens"):return {"input_tokens":10000}
+            if body.get("service_tier")=="flex" and rejected[0]:
+                rejected[0]=False;raise p.ResourceUnavailable("no resource")
+            return {"status":"completed","service_tier":body["service_tier"],"usage":{"input_tokens":10000,"output_tokens":1000,"input_tokens_details":{}},
+                    "output":[{"type":"message","content":[{"type":"output_text","text":'{"findings":[]}'}]}]}
+        budget=p.Budget();model=p.Model("gpt-6.1-sol",send)
+        self.assertEqual(model.invoke("system",{},budget,"discovery"),{"findings":[]})
+        self.assertTrue(model.flex_fallback);self.assertEqual(model.service_tier,"flex")
+        self.assertEqual(budget.spent,30000)   # 10k input at $2 + 1k output at $10, standard rates
+        self.assertTrue(budget.report()["billing_complete"])
+        # The next call tries Flex again and is billed at Flex rates.
+        model.invoke("system",{},budget,"discovery")
+        self.assertEqual(budget.calls[-1]["service_tier_requested"],"flex")
+        self.assertEqual(budget.spent,30000+15000)
     def test_unknown_rejection_preserves_reservation(self):
         send,_=self.transport(error=p.ReviewUnavailable("HTTP 429"));budget=p.Budget()
         with self.assertRaises(p.ReviewUnavailable):p.Model("gpt-6.1-sol",send).invoke("system",{},budget,"discovery")

@@ -56,6 +56,8 @@ from __future__ import annotations
 
 import base64
 from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
+import contextvars
 from contextvars import ContextVar
 import fnmatch
 import functools
@@ -459,6 +461,10 @@ def _parse_added_head_lines(patch: str) -> list[int]:
 # Immutable tree and blob reads
 # ---------------------------------------------------------------------------
 
+PREFETCH_WORKERS = 8
+PREFETCH_MAX_PATHS = 120
+
+
 class _CommitReader:
     """Reads one commit's files by walking its tree; caches per directory."""
 
@@ -497,6 +503,45 @@ class _CommitReader:
         prefix = f"{directory}/" if directory else ""
         return sorted(prefix + name for name, entry in entries.items()
                       if entry.get("type") == "blob" and str(entry.get("mode", "")) != SYMLINK_MODE)
+
+    def prefetch(self, paths: list[str], blobs: bool = True) -> None:
+        """Warm the shared immutable cache for these paths' trees and blobs, PREFETCH_WORKERS at a time.
+
+        Only a speed-up: GitHub answers one read in ~0.5 s and a review makes about 90, which took ~40 s
+        one after another. Nothing is returned or recorded here and every failure is ignored; the
+        sequential reads that follow make (or reuse) the same calls and report their own outcomes.
+        """
+        wanted = [p for p in dict.fromkeys(paths) if content_exclusion_reason(p) is None][:PREFETCH_MAX_PATHS]
+        if len(wanted) < 2:
+            return
+
+        def blob_endpoint(path):
+            try:
+                file_entry = self.entry(path)
+            except Exception:  # noqa: BLE001 - the sequential read reports it
+                return None
+            if (not file_entry or file_entry.get("type") != "blob" or str(file_entry.get("mode", "")) in
+                    (SYMLINK_MODE, SUBMODULE_MODE) or int(file_entry.get("size") or 0) > MAX_BLOB_BYTES):
+                return None
+            return f"repos/{self.repository}/git/blobs/{file_entry['sha']}"
+
+        def fetch(endpoint):
+            try:
+                github_get_immutable(endpoint)
+            except Exception:  # noqa: BLE001 - the sequential read reports it
+                pass
+
+        # Each task runs in its own copy of THIS (submitting) thread's context, taken here before submission,
+        # so the shared source deadline bounds the workers' reads too. A copy taken inside a worker would
+        # be the worker's empty context, with no deadline.
+        with ThreadPoolExecutor(PREFETCH_WORKERS) as pool:
+            endpoints = [future.result() for future in
+                         [pool.submit(contextvars.copy_context().run, blob_endpoint, path) for path in wanted]]
+            if not blobs:
+                return
+            for future in [pool.submit(contextvars.copy_context().run, fetch, endpoint)
+                           for endpoint in endpoints if endpoint]:
+                future.result()
 
     def read_text(self, path: str) -> tuple[Optional[str], Optional[str]]:
         """(text, None) or (None, reason). Refuses unsafe, credential, excluded, symlink and binary paths."""
@@ -871,6 +916,12 @@ def collect_context(repository: str, number: int, head_sha: Optional[str] = None
 
     head_reader = _CommitReader(repository, resolved_head_sha)
     base_reader = _CommitReader(repository, merge_base_sha)
+    # The per-file checks below look every changed path up in both trees: walk those trees in parallel first.
+    head_reader.prefetch([str(c.get("filename", "")) for c in compared_files if c.get("status") != "removed"
+                          and is_safe_path(str(c.get("filename", "")))], blobs=False)
+    base_reader.prefetch([str(c.get("previous_filename") or c.get("filename", "")) for c in compared_files
+                          if c.get("status") != "added"
+                          and is_safe_path(str(c.get("previous_filename") or c.get("filename", "")))], blobs=False)
 
     def is_symlink_or_submodule(reader: _CommitReader, path: Optional[str]) -> bool:
         if not path or not is_safe_path(path):
@@ -1013,6 +1064,7 @@ def collect_context(repository: str, number: int, head_sha: Optional[str] = None
         return anything_included, False
 
     # Changed files at head: whole when small, else neighborhoods of their changed lines.
+    head_reader.prefetch([record["path"] for record in reviewable_changed])
     for record in reviewable_changed:
         text, refusal = head_reader.read_text(record["path"])
         if text is None:
@@ -1156,6 +1208,8 @@ def collect_context(repository: str, number: int, head_sha: Optional[str] = None
                     caller_candidates.append(candidate)
     scanned = 0
     caller_count = 0
+    if budget.remaining > 0:
+        head_reader.prefetch(caller_candidates[:MAX_CALLER_SCAN_FILES])
     for candidate in caller_candidates:
         if scanned >= MAX_CALLER_SCAN_FILES or caller_count >= MAX_CALLER_FILES or budget.remaining <= 0:
             break

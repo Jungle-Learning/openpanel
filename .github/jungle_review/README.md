@@ -78,7 +78,21 @@ match can still produce a duplicate. The bot never resolves threads automaticall
 
 Each result names the exact reviewed head, model, effort, version, cost and
 coverage. Partial or unavailable review is never reported as a clean bill of
-health. Reviews are comments, not approvals. Existing tests, security risk gates,
+health.
+
+**Complete, partial and unavailable (publisher 2026-11-13.4).** A review is
+*partial* only when changed production code or configuration was not examined: a
+primary unit not audited, a source patch GitHub withheld, unusable model output for
+a unit, or suspected defects the final verification could not check. The
+reviewer's own open questions, undecided candidates, reads it could not make and
+skipped tests, docs or data files are *review notes*: folded into the summary's
+Details, never a reason to rerun. On the first production day (November 13) only
+2 of 20 reviews were complete; 12 partial results were almost entirely the
+reviewer's open questions. Replayed on the 10 newest production scopes, this
+release completed 9 and was partial on 1 large PR whose budget ran out. Complete and
+partial reviews both leave a green status (advisory); the signed receipt keeps the
+outcome, and automated merge paths still accept only `complete`. Only an
+*unavailable* review (nothing was reviewed) is red. Reviews are comments, not approvals. Existing tests, security risk gates,
 human approval requirements and unresolved review-thread rules still apply.
 
 ## Cost contract
@@ -117,6 +131,14 @@ development comparisons favored it over Opus 5.5 medium at this budget. Earlier
 high-effort experiments did not improve quality. Every call records its effort. The release exception and remaining quality
 limitations are explicit in the evaluation record.
 Requests use Flex, with no paid tools, regional premium or long-context tier.
+When Flex rejects a request for capacity (uncharged), that call is retried once
+on the default tier; the next call tries Flex again. Reservations are already at
+standard rates, so this cannot exceed the cap; it only forgoes the Flex discount
+for that call. Before this fallback, 4 of the first 20 production reviews were
+lost to Flex capacity, and in a replay at 16:00 UTC the previous release was
+unavailable on 9 of 9 scopes. Flex also adds about 9 s of latency per call
+(trivial request: ~10 s Flex, ~2 s default), which is accepted because the review
+runs beside much longer CI jobs.
 Flex rates are $1 input, $0.05 cache read, $1.25 for a 30-minute cache write and
 $5 output per million tokens. Every call reserves standard rates and settles at
 the tier actually served. Unknown billing retains its reservation; an explicit
@@ -203,8 +225,9 @@ a genuine run do not authenticate a status: another workflow can forge that
 combination. Reject receipts when the verification key is unavailable. The check
 name, signature-shaped text, or generic Actions comment alone is not authority.
 Complete results end in a signed `jr1 P` receipt naming the PR, merge-base prefix,
-outcome, new findings and still-open findings. Partial results use a failure
-status; unavailable results use error and carry no completion receipt. The
+outcome, new findings and still-open findings. Partial results use a success
+status whose receipt says `partial`, which automated consumers reject as
+incomplete; unavailable results use error and carry no completion receipt. The
 workflow itself can finish successfully after reporting those outcomes, so its
 conclusion alone is insufficient. The job needs `actions: read` to authenticate
 the referenced workflow run.

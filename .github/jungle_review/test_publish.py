@@ -983,10 +983,25 @@ class OutcomeTests(unittest.TestCase):
         publisher(github, fake_review(result)).run()
         return github
 
-    def test_partial_and_unavailable_never_write_success(self):
+    def test_summary_lists_only_unexamined_code_and_folds_review_notes(self):
+        github = self.run_outcome({"status": "complete", "findings": [], "coverage_gaps": [],
+                                   "review_notes": ["Question q1: unresolved source question: which caller?"]})
+        body = github.comments[-1]["body"] if hasattr(github, "comments") else None
+        if body is None:
+            self.skipTest("FakeGitHub keeps no comment bodies")
+        head, folded = body.split("<details>", 1)
+        self.assertIn("no verified issues", head)
+        self.assertNotIn("Question q1", head)
+        self.assertIn("Question q1", folded)
+        self.assertEqual(github.statuses[-1][1], "success")
+
+    def test_partial_is_an_advisory_success_and_unavailable_never_writes_success(self):
+        # A partial review finished: its status is green (advisory), and its signed receipt still says
+        # "partial", which automated merge paths do not accept as a complete review.
         github = self.run_outcome({"status": "partial", "findings": [], "coverage_gaps": ["gap"]})
-        self.assertEqual(github.statuses[-1][1], "failure")
-        self.assertNotIn("success", [state for _, state, _ in github.statuses])
+        self.assertEqual(github.statuses[-1][1], "success")
+        self.assertIn("Partial coverage", github.statuses[-1][2])
+        self.assertIn(" partial 0 0 ", github.statuses[-1][2])
         github = self.run_outcome({"status": "unavailable", "findings": [finding()], "coverage_gaps": ["down"]})
         self.assertNotIn("success", [state for _, state, _ in github.statuses])
         self.assertEqual(github.statuses[-1][1], "error")

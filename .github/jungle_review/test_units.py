@@ -1,6 +1,7 @@
 """evidence-v24 (units): deterministic routing, unit audits and the mandatory final verification. Fake models only."""
 import json
 import unittest
+from unittest.mock import patch
 
 import focused
 import prompts
@@ -202,8 +203,11 @@ class BudgetTests(unittest.TestCase):
         audited_roles = [u["role"] for u in log if u["audited"]]
         self.assertEqual(audited_roles[:2], ["primary", "primary"])
         self.assertTrue(any(u["role"] == "deferred" and not u["audited"] for u in log))
-        self.assertTrue(any(g.startswith("deferred unit") and "not audited (budget)" in g for g in result["coverage_gaps"]))
-        self.assertEqual(result["status"], "partial")
+        # Deferred units (tests, fixtures, docs next to production code) left out are notes, not gaps.
+        self.assertTrue(any(g.startswith("deferred unit") and "not audited (budget)" in g for g in result["review_notes"]))
+        self.assertFalse(any(g.startswith("deferred unit") for g in result["coverage_gaps"]))
+        self.assertEqual(result["coverage_gaps"], [])
+        self.assertEqual(result["status"], "complete")
         self.assertLessEqual(result["budget"]["cost_upper_bound_usd"], 0.23)
 
     def test_no_primary_unit_fits_sends_nothing(self):
@@ -237,11 +241,16 @@ class ResultTests(unittest.TestCase):
         self.assertEqual(result["status"], "complete")
         self.assertEqual(result["coverage_gaps"], [])
         self.assertTrue(any("yarn.lock" in note and "excluded" in note for note in result["scope_notes"]))
-        # A missing source patch without a collector policy exclusion still fails closed.
+        # A data file without a patch and without a policy exclusion is a review note, not unexamined code.
         data["coverage"]["excluded_files"] = []
         result = run(UnitModel([answer(), final]), data)
+        self.assertEqual(result["status"], "complete")
+        self.assertTrue(any("yarn.lock" in note for note in result["review_notes"]))
+        # A missing source patch still fails closed.
+        data = sample_inventory(files=[*files[:1], record("src/b.ts", None)])
+        result = run(UnitModel([answer(), final]), data)
         self.assertEqual(result["status"], "partial")
-        self.assertTrue(any("yarn.lock" in note for note in result["coverage_gaps"]))
+        self.assertTrue(any("src/b.ts" in note for note in result["coverage_gaps"]))
 
     def test_unusable_unit_result_is_a_named_gap_and_the_review_continues(self):
         model = UnitModel([{"findings": "x", "summary": "s"}] + [answer(hypotheses=[HYP])] + [answer()] * 8)
@@ -290,7 +299,7 @@ class ResultTests(unittest.TestCase):
                       gaps=[f"q{n}" for n in range(8)])
         model = UnitModel([many] + [answer()] * 12)
         result = run(model)
-        text = "\n".join(result["coverage_gaps"])
+        text = "\n".join(result["review_notes"])
         self.assertIn("unit 1: 2 provisional finding(s) beyond the unit limit of 5", text)
         self.assertIn("unit 1: 2 hypothesis(es) beyond the unit limit of 8", text)
         self.assertIn("unit 1: 2 evidence request(s) beyond the unit limit of 3", text)
@@ -345,6 +354,15 @@ class VerificationTests(unittest.TestCase):
         self.assertTrue(verification[0]["cache_context"]["hunks"])  # real audited code, not an empty package
         self.assertTrue(all(i["kind"] == "second-look" for i in result["audit"]["items"]))
 
+    def test_an_overflowing_second_look_list_never_makes_a_review_partial(self):
+        # Cursor Bugbot on PR 1609: the synthetic second-look items name audited files, not suspected defects.
+        import units as module
+        with patch.object(focused, "CANDIDATE_LIST_MAX_CHARS", 300):
+            result = run(UnitModel([answer()] * 10))
+        self.assertEqual(result["units"]["verification"], "second look")
+        self.assertTrue(any(n.startswith("candidate not carried to verification") for n in result["scope_notes"]))
+        self.assertFalse(any(g.startswith("candidate not carried") for g in result["coverage_gaps"]))
+
     def test_a_second_look_that_does_not_fit_is_skipped_without_a_paid_call(self):
         class Tight(UnitModel):
             def required_budget(self, system, payload, phase, **kwargs):
@@ -372,7 +390,7 @@ class VerificationTests(unittest.TestCase):
                  record("src/a.ts", modified(["a"], ["b"]))]
         model = UnitModel([answer()] * 4)
         result = run(model, context=inventory(files=files, context_files=[]))
-        self.assertTrue(any("src/gone.ts: no head line is shown" in g for g in result["coverage_gaps"]))
+        self.assertTrue(any("src/gone.ts: no head line is shown" in g for g in result["review_notes"]))
         audited = [p for u in result["units"]["units"] if u["audited"] for p in u["files"]]
         self.assertIn("src/gone.ts", audited)
 
@@ -430,8 +448,39 @@ class FinalFitTests(unittest.TestCase):
         result = run(model)
         self.assertNotEqual(result["status"], "unavailable")
         dropped = [g for g in result["coverage_gaps"] if g.startswith("candidate not carried to verification (final budget)")]
+        self.assertEqual(result["status"], "partial")  # an unverified suspected defect is unexamined
         self.assertEqual(len(dropped), 2)
         self.assertEqual(len(result["audit"]["items"]), 2)
+
+    def test_a_verification_that_cannot_fit_keeps_the_audits_as_a_partial_review(self):
+        # Before 2026-11-13.4 this raised and the whole paid review was published as "unavailable".
+        class NeverFits(UnitModel):
+            def required_budget(self, system, payload, phase, **kwargs):
+                if phase == "verification" and payload.get("candidates_and_hypotheses"):
+                    return 10_000_000  # the floor admitted the audits; the real candidates then never fit
+                return super().required_budget(system, payload, phase, **kwargs)
+        model = NeverFits([answer(hypotheses=[HYP])] + [answer()] * 9)
+        result = run(model)
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["findings"], [])
+        self.assertTrue(any(g.startswith("suspected defect not verified (budget)") for g in result["coverage_gaps"]))
+        self.assertNotIn("verification", [c["phase"] for c in model.calls])
+
+    def test_only_unexamined_changed_code_is_a_coverage_gap(self):
+        import units as module
+        for gap in ("primary unit 2 not audited (budget): src/a.ts", "primary unit 1 output unusable (x); not reviewed: a",
+                    "primary unit 3 returned an unusable result (y); not reviewed: b",
+                    "candidate not carried to verification (final budget): src/a.ts: h",
+                    "candidate not carried to verification (envelope full): src/a.ts: h (unverified)",
+                    "changed file has no patch in the inventory (not reviewed): src/big.ts",
+                    "suspected defect not verified (time): src/a.ts: h"):
+            self.assertTrue(module.is_unexamined_gap(gap), gap)
+        for note in ("deferred unit 4 not audited (budget): test/a.test.ts", "Question q1: unresolved source question",
+                     "Candidate c1: unresolved after verification", "Verification left unresolved hypotheses",
+                     "unit 1: read of src/x.ts (head) lines 1-10 not started (time)",
+                     "deferred unit 4 output unusable (x); not reviewed: test/a.test.ts",
+                     "deferred unit 4 returned an unusable result (y); not reviewed: test/a.test.ts"):
+            self.assertFalse(module.is_unexamined_gap(note), note)
 
     def test_deferred_units_never_take_what_verifying_existing_candidates_needs(self):
         class Costly(UnitModel):
@@ -443,7 +492,7 @@ class FinalFitTests(unittest.TestCase):
         result = run(model)
         log = result["units"]["units"]
         self.assertFalse(any(u["role"] == "deferred" and u["audited"] for u in log))
-        self.assertTrue(any(g.startswith("deferred unit") for g in result["coverage_gaps"]))
+        self.assertTrue(any(g.startswith("deferred unit") for g in result["review_notes"]))
         self.assertIn("verification", [c["phase"] for c in model.calls])
         self.assertLessEqual(result["budget"]["cost_upper_bound_usd"], 0.41)
 
