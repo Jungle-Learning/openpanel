@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "release_sha256": "7cbd363d56453aad3ffca933f5a59bda65f2ca9ad307df36e3b436b932649a6a",
+  "release_sha256": "ab70ad12af5504bc1e457234f981bddec5db4c5a3e9283a6181e5847a4199ed7",
   "files": {
     ".github/jungle_review/README.md": {
       "sha256": "0f04ae3b16cd27cff73a8ead4453df8314d9b028c6df03a3e18ffa4639449b2c",
@@ -175,11 +175,11 @@
       "mode": "100644"
     },
     ".github/jungle_review/test_units.py": {
-      "sha256": "8b06819521b074137a8c5aeedc1999d0ff723173f4f2dc3be8ca14c9371a4fdb",
+      "sha256": "f0ed1e5d8cf616bb46914180a9b5e19331fb0ab003e6acf925a94e1af00cb47b",
       "mode": "100644"
     },
     ".github/jungle_review/units.py": {
-      "sha256": "0f5f7f39779892f4db3c36d1cec2ddb215b6961495520cf664fc1f613e899035",
+      "sha256": "3605e52d547415a27fc737c0937ee980eeecc90f60d9eb4698225bacdc169ff5",
       "mode": "100644"
     },
     ".github/workflows/jungle-review-tests.yml": {
@@ -193,6 +193,6 @@
   },
   "source": {
     "repository": "Jungle-Learning/jungle-web",
-    "commit": "67915635e9db43454db5f6e93ad69296f95e32ea"
+    "commit": "8ce99bb50e8a112b87f2f27266c2554933ab032f"
   }
 }

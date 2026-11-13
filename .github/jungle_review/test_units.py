@@ -128,6 +128,30 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(routing["unreviewable"], ["src/b.ts"])
         self.assertTrue(any("renamed from src/z.ts" in n for n in routing["notes"]))
 
+    def test_policy_exclusions_remain_named_without_becoming_missing_source(self):
+        files = [record("src/a.ts", modified(["return 1"], ["return 2"])),
+                 record("yarn.lock", None), record("assets/logo.png", None),
+                 record("src/unavailable.ts", None)]
+        data = sample_inventory(files=files)
+        data["coverage"]["excluded_files"] = [
+            {"path": "yarn.lock", "reason": "lockfile"},
+            {"path": "assets/logo.png", "reason": "binary_extension"},
+        ]
+        routing = units.route(data)
+        self.assertEqual(routing["unreviewable"], ["src/unavailable.ts"])
+        for path in ("yarn.lock", "assets/logo.png"):
+            self.assertTrue(any(path in note and "excluded" in note for note in routing["notes"]))
+        evidence = units.unit_evidence(data, routing, 0)
+        routes = {f["path"]: f["route"] for f in evidence["changed_files"]}
+        self.assertIn("excluded", routes["yarn.lock"])
+        self.assertIn("not reviewable", routes["src/unavailable.ts"])
+
+    def test_an_explicit_source_omission_wins_over_an_inconsistent_exclusion(self):
+        data = sample_inventory(files=[record("src/a.ts", None, status="renamed", old_path="src/old.ts")])
+        data["coverage"]["excluded_files"] = [{"path": "src/a.ts", "reason": "generated"}]
+        data["coverage"]["omitted_files"] = [{"path": "src/a.ts", "reason": "no_patch_from_api"}]
+        self.assertEqual(units.route(data)["unreviewable"], ["src/a.ts"])
+
 
 class InstructionTests(unittest.TestCase):
     def test_unit_instruction_uses_the_trusted_schema_and_generic_contract_rule(self):
@@ -202,6 +226,23 @@ def focused_finding():
 
 
 class ResultTests(unittest.TestCase):
+    def test_review_completes_with_explicit_policy_exclusions_but_not_missing_source(self):
+        files = [record("src/a.ts", modified(["export const a = 1;"], ["export const a = 2;"])),
+                 record("yarn.lock", None)]
+        data = sample_inventory(files=files)
+        data["coverage"]["excluded_files"] = [{"path": "yarn.lock", "reason": "lockfile"}]
+        final = dict(answer(), dispositions=[{"candidate_id": "c1", "verdict": "rejected",
+                    "reason": "The changed constant preserves its contract", "evidence": ["src/a.ts:R1 result"]}])
+        result = run(UnitModel([answer(), final]), data)
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["coverage_gaps"], [])
+        self.assertTrue(any("yarn.lock" in note and "excluded" in note for note in result["scope_notes"]))
+        # A missing source patch without a collector policy exclusion still fails closed.
+        data["coverage"]["excluded_files"] = []
+        result = run(UnitModel([answer(), final]), data)
+        self.assertEqual(result["status"], "partial")
+        self.assertTrue(any("yarn.lock" in note for note in result["coverage_gaps"]))
+
     def test_unusable_unit_result_is_a_named_gap_and_the_review_continues(self):
         model = UnitModel([{"findings": "x", "summary": "s"}] + [answer(hypotheses=[HYP])] + [answer()] * 8)
         result = run(model)

@@ -203,12 +203,23 @@ def import_edges(files: dict) -> dict[str, set[str]]:
 
 def route(inventory: dict) -> dict:
     """Units (primary first, then deferred, each by priority) and not-reviewable files; deterministic."""
-    routed, unreviewable, notes = {}, [], []
+    routed, unreviewable, excluded, notes = {}, [], {}, []
+    coverage = inventory.get("coverage", {})
+    policy_exclusions = {entry["path"]: entry.get("reason", "policy")
+                         for entry in coverage.get("excluded_files", [])}
+    omitted = {entry["path"] for entry in coverage.get("omitted_files", [])}
     for record in inventory.get("files", []):
         path = record["path"]
         patch = record.get("patch")
         if not patch:
-            if record.get("status") == "renamed":
+            # Only the collector may exclude a path. A missing source observation still wins
+            # if inconsistent metadata also calls it an exclusion or a content-free rename.
+            if path in omitted:
+                unreviewable.append(path)
+            elif path in policy_exclusions:
+                excluded[path] = policy_exclusions[path]
+                notes.append(f"{path}: excluded by policy ({excluded[path]})")
+            elif record.get("status") == "renamed":
                 notes.append(f"{path}: renamed from {record.get('old_path')} without a content patch")
             else:
                 unreviewable.append(path)
@@ -274,7 +285,8 @@ def route(inventory: dict) -> dict:
         else:
             units.append(sorted(piece))
     roles = [role(u[0]) for u in units]
-    return {"units": units, "roles": roles, "unreviewable": sorted(unreviewable), "notes": notes,
+    return {"units": units, "roles": roles, "unreviewable": sorted(unreviewable), "excluded": excluded,
+            "notes": sorted(notes),
             "promoted": promoted}
 
 
@@ -283,6 +295,7 @@ def unit_evidence(inventory: dict, routing: dict, index: int) -> dict:
     unit = routing["units"][index]
     where = {p: f"unit {n + 1} ({routing['roles'][n]})" for n, u in enumerate(routing["units"]) for p in u}
     where.update({p: "not reviewable (no patch)" for p in routing["unreviewable"]})
+    where.update({p: f"excluded by policy ({reason})" for p, reason in routing["excluded"].items()})
     changed = []
     for record in inventory.get("files", []):
         entry = {"path": record["path"], "status": record.get("status"),
@@ -475,7 +488,8 @@ def review_units(context: dict, model: Model, read_file, budget: Budget | None =
     read_paths = set()
     diagnostics = {"routing": {"units": len(units), "primary": routing["roles"].count("primary"),
                                "deferred": routing["roles"].count("deferred"), "promoted": routing["promoted"],
-                               "unreviewable": routing["unreviewable"], "notes": routing["notes"]},
+                               "unreviewable": routing["unreviewable"], "excluded": routing["excluded"],
+                               "notes": routing["notes"]},
                    "units": units_log, "verification": None, "read_paths": []}
     scope_notes.extend(routing["notes"])
     # evidence-v24: final-only dispositions (root's dispositions.py): one per controller-assigned candidate ID.
