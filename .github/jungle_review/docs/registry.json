@@ -1,0 +1,335 @@
+{
+  "schema": 2,
+  "max_docs_per_review": 2,
+  "max_excerpt_chars": 4000,
+  "docs": [
+    {
+      "id": "modal.retries",
+      "vendor": "Modal",
+      "url": "https://modal.com/docs/guide/retries",
+      "kind": "current",
+      "effective_date": null,
+      "topic": "Modal Function container crashes and automatic rescheduling (separate from application-level retries).",
+      "fetched_at": "2026-11-12T05:11:39Z",
+      "http_status": 200,
+      "raw_sha256": "c9e247c65e012a9a39c21c430f601074029eb3bfe94ff394b8f5a326590f5d4c",
+      "excerpt_sha256": "eae3d4bafc4058e4eba40972ee89a7b5f48351d9ec7a5b67ea33f29ae6a94135",
+      "excerpt_chars": 699,
+      "snapshot": "docs/modal.retries.txt",
+      "extraction": "html.parser block text (p/li/h*/td/th/pre/blockquote/dd/dt), whitespace collapsed; each paragraph is an exact block of the fetched page",
+      "relevance": {
+        "auto": true,
+        "family": "modal-function-execution",
+        "ecosystem": {
+          "imports": [
+            {
+              "name": "python import modal",
+              "regex": "^\\s*(import\\s+modal\\b|from\\s+modal(\\.\\w+)*\\s+import\\b)"
+            }
+          ]
+        },
+        "surface": [
+          {
+            "name": "modal function decorator",
+            "regex": "@\\w+\\.(function|cls)\\s*\\("
+          },
+          {
+            "name": "retries argument",
+            "regex": "\\bretries\\s*="
+          },
+          {
+            "name": "modal.Retries",
+            "regex": "\\bmodal\\.Retries\\b"
+          },
+          {
+            "name": "remote invocation",
+            "regex": "\\.(spawn|spawn_map|remote|remote_gen|starmap|for_each)\\s*\\("
+          },
+          {
+            "name": "Function lookup",
+            "regex": "\\bmodal\\.(Function|Cls)\\.(from_name|lookup)\\b"
+          }
+        ],
+        "scope": "runtime",
+        "runtime_caveat": "A Modal import in a changed file is a relevance signal, not proof that the changed code executes inside a Modal Function."
+      }
+    },
+    {
+      "id": "modal.preemption",
+      "vendor": "Modal",
+      "url": "https://modal.com/docs/guide/preemption",
+      "kind": "current",
+      "effective_date": null,
+      "topic": "Preemption of Modal Functions and restart on the same input.",
+      "fetched_at": "2026-11-12T05:11:39Z",
+      "http_status": 200,
+      "raw_sha256": "72ad40c702d45e81fe0a5c650547ebdf16f25e1a921ad25074d014858d1a7e4c",
+      "excerpt_sha256": "e290ad60fd0969fcf9e737d44997c23494ac946a46e85472f72036babb0aef14",
+      "excerpt_chars": 259,
+      "snapshot": "docs/modal.preemption.txt",
+      "extraction": "html.parser block text (p/li/h*/td/th/pre/blockquote/dd/dt), whitespace collapsed; each paragraph is an exact block of the fetched page",
+      "relevance": {
+        "auto": true,
+        "family": "modal-function-execution",
+        "ecosystem": {
+          "imports": [
+            {
+              "name": "python import modal",
+              "regex": "^\\s*(import\\s+modal\\b|from\\s+modal(\\.\\w+)*\\s+import\\b)"
+            }
+          ]
+        },
+        "surface": [
+          {
+            "name": "modal function decorator",
+            "regex": "@\\w+\\.(function|cls)\\s*\\("
+          },
+          {
+            "name": "retries argument",
+            "regex": "\\bretries\\s*="
+          },
+          {
+            "name": "modal.Retries",
+            "regex": "\\bmodal\\.Retries\\b"
+          },
+          {
+            "name": "remote invocation",
+            "regex": "\\.(spawn|spawn_map|remote|remote_gen|starmap|for_each)\\s*\\("
+          },
+          {
+            "name": "Function lookup",
+            "regex": "\\bmodal\\.(Function|Cls)\\.(from_name|lookup)\\b"
+          },
+          {
+            "name": "preemption setting",
+            "regex": "\\b(non)?preemptible\\s*="
+          }
+        ],
+        "scope": "runtime",
+        "runtime_caveat": "A Modal import in a changed file is a relevance signal, not proof that the changed code executes inside a Modal Function."
+      }
+    },
+    {
+      "id": "cloudflare.do-alarms",
+      "vendor": "Cloudflare",
+      "url": "https://developers.cloudflare.com/durable-objects/api/alarms/",
+      "kind": "current",
+      "effective_date": null,
+      "topic": "Durable Object alarm() delivery and retry guarantees.",
+      "fetched_at": "2026-11-12T05:11:39Z",
+      "http_status": 200,
+      "raw_sha256": "4f8b994f9a230420b94de5d169d9b5973eac30f3f427643d0a9b05dbf62a1eaf",
+      "excerpt_sha256": "5b56e75af6cadaac660b4184f0b22c5b9b5f261de98c7eb58c62d53e8d1a0ceb",
+      "excerpt_chars": 406,
+      "snapshot": "docs/cloudflare.do-alarms.txt",
+      "extraction": "html.parser block text (p/li/h*/td/th/pre/blockquote/dd/dt), whitespace collapsed; each paragraph is an exact block of the fetched page",
+      "relevance": {
+        "auto": true,
+        "family": "cloudflare-durable-object-alarms",
+        "ecosystem": {
+          "imports": [
+            {
+              "name": "DurableObject class",
+              "regex": "\\b(extends\\s+DurableObject|implements\\s+DurableObject|DurableObjectState)\\b"
+            },
+            {
+              "name": "cloudflare workers import",
+              "regex": "from\\s+['\"]cloudflare:workers['\"]"
+            }
+          ]
+        },
+        "surface": [
+          {
+            "name": "alarm scheduling",
+            "regex": "\\.(setAlarm|getAlarm|deleteAlarm)\\s*\\("
+          },
+          {
+            "name": "alarm handler",
+            "regex": "\\basync\\s+alarm\\s*\\(|\\balarm\\s*\\(\\s*(alarmInfo)?\\s*\\)\\s*(:\\s*\\w[^{]*)?\\{"
+          }
+        ]
+      }
+    },
+    {
+      "id": "firestore.transactions",
+      "vendor": "Firebase (Cloud Firestore)",
+      "url": "https://firebase.google.com/docs/firestore/manage-data/transactions",
+      "kind": "current",
+      "effective_date": null,
+      "topic": "Cloud Firestore transaction retries and side effects in transaction functions.",
+      "fetched_at": "2026-11-12T05:11:39Z",
+      "http_status": 200,
+      "raw_sha256": "eeea33a1ce249869739d609d8dcff5f135ca4eec4b67ed6f322f55c91e897b77",
+      "excerpt_sha256": "64c0255008642f1b9d3e515f951ca326e23c3edfc88375038d8799ea32274de3",
+      "excerpt_chars": 1038,
+      "snapshot": "docs/firestore.transactions.txt",
+      "extraction": "html.parser block text (p/li/h*/td/th/pre/blockquote/dd/dt), whitespace collapsed; each paragraph is an exact block of the fetched page",
+      "relevance": {
+        "auto": true,
+        "family": "firestore-transactions",
+        "ecosystem": {
+          "imports": [
+            {
+              "name": "firestore js import",
+              "regex": "from\\s+['\"](firebase/firestore|firebase-admin(/firestore)?|@google-cloud/firestore)['\"]|require\\(\\s*['\"](firebase-admin|@google-cloud/firestore)['\"]\\s*\\)"
+            },
+            {
+              "name": "firestore python import",
+              "regex": "^\\s*(from\\s+(google\\.cloud\\s+import\\s+firestore|google\\.cloud\\.firestore\\w*|firebase_admin(\\.\\w+)?)\\s+import\\b|from\\s+google\\.cloud\\s+import\\s+firestore\\b|import\\s+firebase_admin\\b)"
+            }
+          ]
+        },
+        "surface": [
+          {
+            "name": "runTransaction",
+            "regex": "\\brunTransaction\\s*\\("
+          },
+          {
+            "name": "transactional decorator",
+            "regex": "@\\s*(firestore\\.)?(async_)?transactional\\b"
+          },
+          {
+            "name": "transaction object",
+            "regex": "\\.transaction\\s*\\(\\s*\\)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "stripe.webhooks",
+      "vendor": "Stripe",
+      "url": "https://docs.stripe.com/webhooks",
+      "kind": "current",
+      "effective_date": null,
+      "topic": "Stripe webhook duplicate delivery, ordering and retry window.",
+      "fetched_at": "2026-11-12T05:11:39Z",
+      "http_status": 200,
+      "raw_sha256": "ebaf595e7ca1453da475e397322586edf93697630ac2e8e075de7b5606c2ff6d",
+      "excerpt_sha256": "7b106df7fe4a057bd94d7c22c521fe0908af673940bb29373ec03424361d30e1",
+      "excerpt_chars": 930,
+      "snapshot": "docs/stripe.webhooks.txt",
+      "extraction": "html.parser block text (p/li/h*/td/th/pre/blockquote/dd/dt), whitespace collapsed; each paragraph is an exact block of the fetched page",
+      "relevance": {
+        "auto": true,
+        "family": "stripe-webhooks",
+        "ecosystem": {
+          "imports": [
+            {
+              "name": "stripe js import",
+              "regex": "from\\s+['\"]stripe['\"]|require\\(\\s*['\"]stripe['\"]\\s*\\)"
+            },
+            {
+              "name": "stripe python import",
+              "regex": "^\\s*(import\\s+stripe\\b|from\\s+stripe(\\.\\w+)*\\s+import\\b)"
+            }
+          ]
+        },
+        "surface": [
+          {
+            "name": "webhook signature verification",
+            "regex": "\\b(constructEvent(Async)?|construct_event)\\s*\\("
+          },
+          {
+            "name": "signature header",
+            "regex": "(?i)\\bstripe-signature\\b"
+          },
+          {
+            "name": "event type dispatch",
+            "regex": "\\bevent\\.type\\b|\\[\\s*['\"]type['\"]\\s*\\]\\s*==|case\\s+['\"][a-z_]+\\.[a-z_.]+['\"]"
+          }
+        ]
+      }
+    },
+    {
+      "id": "react.strict-mode",
+      "vendor": "React",
+      "url": "https://react.dev/reference/react/StrictMode",
+      "kind": "current",
+      "effective_date": null,
+      "topic": "React Strict Mode development-only double invocation of pure functions and Effects.",
+      "fetched_at": "2026-11-12T05:11:39Z",
+      "http_status": 200,
+      "raw_sha256": "ea7a3f610d6b2309d93debf5de050712d2f0b64cfd87b7b9251c2260253411a7",
+      "excerpt_sha256": "f63f244be27b4820150b093dafbad3f4a27b7d6cbe8ddcf38f0b5ec475d8853a",
+      "excerpt_chars": 504,
+      "snapshot": "docs/react.strict-mode.txt",
+      "extraction": "html.parser block text (p/li/h*/td/th/pre/blockquote/dd/dt), whitespace collapsed; each paragraph is an exact block of the fetched page",
+      "relevance": {
+        "auto": true,
+        "family": "react-strict-mode",
+        "ecosystem": {
+          "imports": [
+            {
+              "name": "react import",
+              "regex": "from\\s+['\"]react['\"]|require\\(\\s*['\"]react['\"]\\s*\\)"
+            }
+          ]
+        },
+        "surface": [
+          {
+            "name": "StrictMode",
+            "regex": "\\bStrictMode\\b"
+          },
+          {
+            "name": "effect hook",
+            "regex": "\\buse(Layout|Insertion)?Effect\\s*\\("
+          }
+        ]
+      }
+    },
+    {
+      "id": "github.events.pull_request_target",
+      "vendor": "GitHub Actions",
+      "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows",
+      "kind": "current",
+      "effective_date": null,
+      "topic": "Current pull_request_target execution context.",
+      "fetched_at": "2026-11-12T05:11:39Z",
+      "http_status": 200,
+      "raw_sha256": "79f5998aea6fbf26db80763ac0dcebbb9f1e66329ba71a7600071ed8fcfaf315",
+      "excerpt_sha256": "a20b4c7cba623507453bfe1271000e5b2996bf5e2f6d34c8d54e960859f05b86",
+      "excerpt_chars": 484,
+      "snapshot": "docs/github.events.pull_request_target.txt",
+      "extraction": "html.parser block text (p/li/h*/td/th/pre/blockquote/dd/dt), whitespace collapsed; each paragraph is an exact block of the fetched page",
+      "relevance": {
+        "auto": true,
+        "family": "github-pull-request-target",
+        "ecosystem": {
+          "paths": [
+            {
+              "name": "workflow file",
+              "regex": "^\\.github/workflows/[^/]+\\.ya?ml$"
+            }
+          ]
+        },
+        "surface": [
+          {
+            "name": "pull_request_target trigger",
+            "regex": "\\bpull_request_target\\b"
+          }
+        ]
+      }
+    },
+    {
+      "id": "github.changelog.pull_request_target-2025-11-07",
+      "vendor": "GitHub Actions",
+      "url": "https://github.blog/changelog/2025-11-07-actions-pull_request_target-and-environment-branch-protections-changes/",
+      "kind": "historical",
+      "effective_date": "2025-12-08",
+      "topic": "Dated contract change: pull_request_target workflow source and environment rules from 2025-12-08.",
+      "fetched_at": "2026-11-12T05:11:39Z",
+      "http_status": 200,
+      "raw_sha256": "7fcddf652e2183c4e6931c2e1ef0afa2c1fbabffec37fb8e0c121308ba1231fc",
+      "excerpt_sha256": "78b8b19643b4a3657a0be308dc640206a9f9ca9127cb9766069aad4fd6e934fd",
+      "excerpt_chars": 927,
+      "snapshot": "docs/github.changelog.pull_request_target-2025-11-07.txt",
+      "extraction": "html.parser block text (p/li/h*/td/th/pre/blockquote/dd/dt), whitespace collapsed; each paragraph is an exact block of the fetched page",
+      "relevance": {
+        "family": "github-pull-request-target",
+        "auto": false,
+        "note": "historical: request-only; it applies only after its effective date"
+      }
+    }
+  ],
+  "relevance_policy": "Deterministic, generic auto-selection: a snapshot is eligible when a changed source/config file uses its vendor (ecosystem gate, any line of that file) AND a changed line (+/- only) in that same file matches one of its contract-surface patterns. Patterns name the APIs whose contract the snapshot itself describes. Historical snapshots are never auto-selected. Revision 2 (disclosed, dev-informed): snapshots marked scope \"runtime\" describe a contract that applies to all code executing in the vendor runtime, so the ecosystem gate on a changed source file suffices without a changed surface construct; the vendor import is a relevance signal, never proof of execution in that runtime."
+}

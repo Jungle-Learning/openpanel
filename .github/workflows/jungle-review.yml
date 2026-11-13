@@ -1,0 +1,98 @@
+name: Jungle Review
+# publish.py checks this exact title (run_title) to bind a run to one pull request.
+run-name: "Jungle Review #${{ github.event.pull_request.number || inputs.pr_number }}"
+
+# Shared advisory pull request reviewer; see .github/jungle_review/publish.py.
+# Since 2025-12-08, pull_request_target always runs the DEFAULT branch's workflow
+# file with GITHUB_SHA = the default branch tip, and this job checks out only the
+# reviewer code at that commit. So a pull request (from a fork, Dependabot or
+# anyone else) cannot change the code, prompts, prices or budget that review
+# it. The pull request's code is never checked out or executed: its diff and
+# files are read as data through the API. Every author is reviewed, bots included.
+#
+# Publishes, per repository + pull request + merge base + head commit (one
+# exact diff; a retargeted pull request is a new scope): the "Jungle Review"
+# commit status (linked to this run; its status history is also the scope's
+# durable spend ledger), at most one COMMENT review, and one summary comment.
+#
+# Provisioning (owner): create the environment "jungle-review" with deployment
+# branches limited to the default branch, no required reviewers, wait timers or
+# custom rules. Each run records an environment deployment; that is expected. Store JUNGLE_REVIEW_MARKER_KEY (required, 32+ random characters)
+# and JUNGLE_REVIEW_OPENAI_API_KEY (gpt-6.1-sol, medium) as secrets
+# of that environment only, never as repository,
+# organization or Dependabot secrets, which other workflows could read.
+# Public repositories: GitHub's default pull_request_target policy is in
+# evaluate mode until 2026-12-02 and blocks it after that unless an Actions
+# event policy allows this workflow.
+
+on:
+  pull_request_target:
+    # edited: only a base change (filtered below) starts a review, of the new scope.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to review (its current head)
+        required: true
+        type: number
+
+permissions: {}
+
+jobs:
+  review:
+    name: Jungle Review
+    # A manual run must use the default branch's workflow and reviewer code, and a
+    # title or description edit needs no review.
+    if: >-
+      (github.event_name != 'workflow_dispatch' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+      && (github.event.action != 'edited' || github.event.changes.base != null)
+    # Job-level, so a run whose job is skipped by the condition above (a description
+    # edit, which Dependabot makes right after pushing) never enters the group. At
+    # workflow level such a run replaced the pending review of the commit just pushed
+    # (canary PR #2, run 43153166352, 2026-11-12).
+    concurrency:
+      # One group per pull request for every trigger: it serializes all accounting of
+      # a review scope (repository + pull request + merge base + head). Not repository-wide,
+      # so a pending run of one pull request never replaces another pull request's run.
+      group: jungle-review-${{ github.event.pull_request.number || inputs.pr_number }}
+      # Only a new commit cancels a running review (its scope is then an older head).
+      # Every model reservation is recorded before its request is sent, so a
+      # cancelled run's spend still counts.
+      cancel-in-progress: ${{ github.event.action == 'synchronize' }}
+    runs-on: ubuntu-latest
+    # Bounded discovery/investigation/verification plus API reads/publication. Must equal
+    # provider.JOB_TIMEOUT_MINUTES (tested): the runner allowance assumes this limit plus GitHub's
+    # documented 5-minute cancellation window. The step below is one minute shorter, and the provider's
+    # review deadline sits inside the step, so the publisher can still report before cancellation.
+    timeout-minutes: 9
+    # Its secrets are released only to runs whose ref passes the environment's
+    # branch rule (the default branch; for pull_request_target that is the run's ref).
+    environment: jungle-review
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write
+      # Read workflow runs to verify that a marker was written by this workflow.
+      actions: read
+    steps:
+      - name: Check out the reviewer from the default branch only
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          # github.sha is the default branch commit for both events; never the PR head.
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: .github/jungle_review
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Review and publish
+        timeout-minutes: 8
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          OPENAI_API_KEY: ${{ secrets.JUNGLE_REVIEW_OPENAI_API_KEY }}
+          JUNGLE_REVIEW_MARKER_KEY: ${{ secrets.JUNGLE_REVIEW_MARKER_KEY }}
+          # Trusted repository variable; publish.py accepts only allowlisted models.
+          JUNGLE_REVIEW_MODEL: ${{ vars.JUNGLE_REVIEW_MODEL }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python .github/jungle_review/publish.py

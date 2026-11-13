@@ -1,0 +1,5 @@
+If a modal.Function container crashes (either on start-up, e.g. while handling imports in global scope, or during execution, e.g. an out-of-memory error), Modal will reschedule the container and any work it was currently assigned.
+
+For ephemeral Apps, container crashes will be retried until a failure rate is exceeded, after which all pending inputs will be failed and the exception will be propagated to the caller.
+
+For deployed Apps, container crashes will be retried indefinitely, so as to not disrupt service. Modal will instead apply a crash-loop backoff and the rate of new container creation for the Function will be slowed down. Crash-looping containers are displayed in the App dashboard.

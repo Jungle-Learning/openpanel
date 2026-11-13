@@ -1,0 +1,194 @@
+{
+  "schema": 2,
+  "release_sha256": "209c0e661e6c58cb85dd225268b64a8396dcf6f0911b9fa0d2906313fcbff6ae",
+  "files": {
+    ".github/jungle_review/README.md": {
+      "sha256": "0f04ae3b16cd27cff73a8ead4453df8314d9b028c6df03a3e18ffa4639449b2c",
+      "mode": "100644"
+    },
+    ".github/jungle_review/context.py": {
+      "sha256": "6ddb105087f93e40a441f07330db07ef11b9aa92bc50703b5fa977af886e9261",
+      "mode": "100644"
+    },
+    ".github/jungle_review/dispositions.py": {
+      "sha256": "7de48844b4da8e8efe6f9c6b0329ac69e86cbc00c569a4031244db1f4e85bd10",
+      "mode": "100644"
+    },
+    ".github/jungle_review/docs/cloudflare.do-alarms.txt": {
+      "sha256": "5b56e75af6cadaac660b4184f0b22c5b9b5f261de98c7eb58c62d53e8d1a0ceb",
+      "mode": "100644"
+    },
+    ".github/jungle_review/docs/firestore.transactions.txt": {
+      "sha256": "64c0255008642f1b9d3e515f951ca326e23c3edfc88375038d8799ea32274de3",
+      "mode": "100644"
+    },
+    ".github/jungle_review/docs/github.changelog.pull_request_target-2025-11-07.txt": {
+      "sha256": "78b8b19643b4a3657a0be308dc640206a9f9ca9127cb9766069aad4fd6e934fd",
+      "mode": "100644"
+    },
+    ".github/jungle_review/docs/github.events.pull_request_target.txt": {
+      "sha256": "a20b4c7cba623507453bfe1271000e5b2996bf5e2f6d34c8d54e960859f05b86",
+      "mode": "100644"
+    },
+    ".github/jungle_review/docs/modal.preemption.txt": {
+      "sha256": "e290ad60fd0969fcf9e737d44997c23494ac946a46e85472f72036babb0aef14",
+      "mode": "100644"
+    },
+    ".github/jungle_review/docs/modal.retries.txt": {
+      "sha256": "eae3d4bafc4058e4eba40972ee89a7b5f48351d9ec7a5b67ea33f29ae6a94135",
+      "mode": "100644"
+    },
+    ".github/jungle_review/docs/react.strict-mode.txt": {
+      "sha256": "f63f244be27b4820150b093dafbad3f4a27b7d6cbe8ddcf38f0b5ec475d8853a",
+      "mode": "100644"
+    },
+    ".github/jungle_review/docs/registry.json": {
+      "sha256": "7ed35c6712731aada4e98c71577c08cbffe93940eaf9ca44f91510cb22d94744",
+      "mode": "100644"
+    },
+    ".github/jungle_review/docs/stripe.webhooks.txt": {
+      "sha256": "7b106df7fe4a057bd94d7c22c521fe0908af673940bb29373ec03424361d30e1",
+      "mode": "100644"
+    },
+    ".github/jungle_review/docs_evidence.py": {
+      "sha256": "146381bf90e49ed301802d3b2ab8a9a34ee1ab48ae629517d9111ec213e470d9",
+      "mode": "100644"
+    },
+    ".github/jungle_review/focused.py": {
+      "sha256": "781da56bf8780a457ea91541838a6b6e5cdadc1ced7a6518b8e4d74ef4b0b370",
+      "mode": "100644"
+    },
+    ".github/jungle_review/incremental.py": {
+      "sha256": "4d73fe19539a405bf122ca2d25877e5c91966b49e6a6abce27c90195ed500025",
+      "mode": "100644"
+    },
+    ".github/jungle_review/literal_source.py": {
+      "sha256": "cfaccab41d12379ef82b5e277894bfc2ec91239da2b4becccef376d915809a3d",
+      "mode": "100644"
+    },
+    ".github/jungle_review/prompts.py": {
+      "sha256": "10fd28434db412f1e8c9c64d74ff79c9bcc4292f376f9e1ea2b0542fbb21bc77",
+      "mode": "100644"
+    },
+    ".github/jungle_review/provider.py": {
+      "sha256": "24967cbd7276b76f22726953907956a4688f171efbcc19de94341aac5fdd8164",
+      "mode": "100644"
+    },
+    ".github/jungle_review/publish.py": {
+      "sha256": "c129bcc2155eceb0b092d660e460b706c04f74f48e3c9ad688077b62fa78d238",
+      "mode": "100644"
+    },
+    ".github/jungle_review/questions.py": {
+      "sha256": "26da197c2ec0beef9dc2cae679b1ab7352bb23f025caa38a147754e7d58216b0",
+      "mode": "100644"
+    },
+    ".github/jungle_review/review.py": {
+      "sha256": "53208c8ee1f0da19e130ce09853cd90ee07517806009916a691eb486893b88ab",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_balanced.py": {
+      "sha256": "93c8aa85451635be87be1cc55389141da0d43a0926d563e926eaf5966d4f6d8b",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_claim_identity.py": {
+      "sha256": "acfaae575764512d8f640f02eefde0f217d5e6e5a896298e6d94a73a85a66966",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_context.py": {
+      "sha256": "d1001419f1a3a119e7a61987090c3eb5bc7517c80c5e6b44f7face398af8f178",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_dedup_schema.py": {
+      "sha256": "459f21a95b02ca0a0dc2bf4da1e11db05fd4a47dde6037ffbd869fc0fba5e11d",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_dependency.py": {
+      "sha256": "610e7a30b5bc459e593410df8b3c5b79d7f0002b7c857c390690289b3980ca94",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_dispositions.py": {
+      "sha256": "3abff95179e43a48cec5706bc01e1603f04a36e2699e881eac899e3f1dbdc4df",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_docs_selection.py": {
+      "sha256": "76a0a0aed4a21ac567c20cc804201ddbb9af363e25f0fbbd806e77b0b092c244",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_evidence.py": {
+      "sha256": "48d40e487ea3cb20e4c7fd162bbd0e3be70bcaaed6cd37e031a97d8a572d6e65",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_focused.py": {
+      "sha256": "d241a496d48db34efbb2b4fec5bfb912cfcc86206ad70777c57a6b88cd7b21ac",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_incremental.py": {
+      "sha256": "ca4158a1268489f95c52c748f2918a42f7e9788f17e75c68d99991ff42a6e42c",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_phase.py": {
+      "sha256": "c3049d8bcdb63adb125d1402375a0f70caf496ebb221047975fa09130ff880f1",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_prefix_contract.py": {
+      "sha256": "a73a6a1ba48208587cf311aa5a1b36866144b9e9767ebd6c26331f717c501fb7",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_provider.py": {
+      "sha256": "f510dc524cc65fc283ec7a1d028cd6ca01cf7bc9353551cdc6f535d36c0d0393",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_publish.py": {
+      "sha256": "9379ef58d086447953eb026796cd8d9b584907eea1ec69aa276301347a50ec66",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_publish_focused.py": {
+      "sha256": "c53a5fcc518e7bb3a53174be76cec21f5cdd98c17f4fff41f0f02c65f62fd529",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_review.py": {
+      "sha256": "38cdb62b58e9ac929f9965aaf2e689b05e6e232006d067cf19bae5632860c719",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_runner_admission.py": {
+      "sha256": "559301efc8d219c050e3f99c41dd26e173207316dc0e2065f7e79f238d05c7cc",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_schema.py": {
+      "sha256": "51d4b26e8c647f7c05d7626d9108badb322e36c04b5b8f1f322c8c96092b1691",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_selected.py": {
+      "sha256": "34798dd779344acd4b2bc228887e802f5e13b987955d5f51e9947ec1a4d26ef0",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_service_tier.py": {
+      "sha256": "e46b2db184cbb0142be8c4b1393213b8aacb663d4a4f0c020e708067ec855db5",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_source_deadline.py": {
+      "sha256": "2820d4a712886adae0c2f118902ff9847a6080307c999c167106aae30840eda5",
+      "mode": "100644"
+    },
+    ".github/jungle_review/test_units.py": {
+      "sha256": "8b06819521b074137a8c5aeedc1999d0ff723173f4f2dc3be8ca14c9371a4fdb",
+      "mode": "100644"
+    },
+    ".github/jungle_review/units.py": {
+      "sha256": "0f5f7f39779892f4db3c36d1cec2ddb215b6961495520cf664fc1f613e899035",
+      "mode": "100644"
+    },
+    ".github/workflows/jungle-review-tests.yml": {
+      "sha256": "5e14aace3dbde33252735c1711d7771f5420fa5fedf283f4b20f9253230638d6",
+      "mode": "100644"
+    },
+    ".github/workflows/jungle-review.yml": {
+      "sha256": "10eb1caaf9a205d51aebc1024c9086f2f82e8e9b9a8cdc43d2fc6dc131b4a14c",
+      "mode": "100644"
+    }
+  },
+  "source": {
+    "repository": "Jungle-Learning/jungle-web",
+    "commit": "f25cebce2420d7401df04f84e4cd9b9fbbab1304"
+  }
+}
