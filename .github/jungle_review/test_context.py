@@ -291,6 +291,125 @@ class CredentialAndSymlinkTests(FakeGitHubTestCase):
     def blob_sha_requested(self, text: str) -> bool:
         return any(endpoint.endswith(fake_sha("blob:" + text)) for endpoint in self.github.requests)
 
+    def split_mode_change(self, base_mode, head_mode, *, reversed_order=False, missing_patch=False):
+        old_text = "old-private-pointer" if base_mode != FILE_MODE else "export const old = 1;\n"
+        new_text = "new-private-pointer" if head_mode != FILE_MODE else "export const source = 1;\n"
+        files = {**BASE_FILES, "src/converted.ts": (base_mode, old_text)}
+        label = base_mode + "-" + head_mode + "-" + str(reversed_order) + "-" + str(missing_patch)
+        base = self.github.commit("split-base-" + label, self.shas["base"], files)
+        files["src/converted.ts"] = (head_mode, new_text)
+        head = self.github.commit("split-head-" + label, base, files)
+        rows = [{"filename": "src/converted.ts", "status": "removed", "changes": 1,
+                 "patch": "@@ -1 +0,0 @@\n-" + old_text.rstrip("\n")},
+                {"filename": "src/converted.ts", "status": "added", "changes": 1,
+                 "patch": "@@ -0,0 +1 @@\n+" + new_text.rstrip("\n")}]
+        if missing_patch:
+            rows[1].pop("patch")
+        if reversed_order:
+            rows.reverse()
+        self.github._compare = lambda before, after: {"merge_base_commit": {"sha": base}, "files": rows}
+        return context.collect_context(REPOSITORY, NUMBER, head_sha=head, base_sha=base)
+
+    def test_github_split_mode_change_keeps_one_regular_head_record(self):
+        for mode in (SYMLINK, context.SUBMODULE_MODE):
+            for reversed_order in (False, True):
+                with self.subTest(base_mode=mode, reversed_order=reversed_order):
+                    result = self.split_mode_change(mode, FILE_MODE, reversed_order=reversed_order)
+                    self.assertEqual(len(result["files"]), 1)
+                    self.assertEqual(result["files"][0]["head_content"], "export const source = 1;\n")
+                    self.assertEqual(result["files"][0]["changed_lines"], [1])
+                    self.assertEqual(result["files"][0]["patch"], "@@ -0,0 +1 @@\n+export const source = 1;")
+                    self.assertEqual(result["coverage"]["excluded_files"], [])
+                    self.assertNotIn("old-private-pointer", json.dumps(result))
+                    self.assertFalse(self.blob_sha_requested("old-private-pointer"))
+
+    def test_github_split_mode_change_excludes_a_nonregular_head(self):
+        for mode in (SYMLINK, context.SUBMODULE_MODE):
+            with self.subTest(head_mode=mode):
+                result = self.split_mode_change(FILE_MODE, mode)
+                self.assertEqual(len(result["files"]), 1)
+                self.assertIsNone(result["files"][0]["patch"])
+                self.assertIn({"path": "src/converted.ts", "reason": "symlink_or_submodule"},
+                              result["coverage"]["excluded_files"])
+                self.assertNotIn("new-private-pointer", json.dumps(result))
+                self.assertFalse(self.blob_sha_requested("new-private-pointer"))
+
+    def test_github_split_mode_change_with_missing_added_patch_is_incomplete(self):
+        result = self.split_mode_change(SYMLINK, FILE_MODE, missing_patch=True)
+        self.assertFalse(result["coverage"]["complete"])
+        self.assertEqual(len(result["files"]), 1)
+        self.assertIn({"path": "src/converted.ts", "reason": "no_patch_from_api"},
+                      result["coverage"]["omitted_files"])
+
+    def test_regular_source_replacing_nonregular_base_is_reviewed_without_old_target(self):
+        old_target = "../secrets/old-pointer.pem"
+        new_text = "export function remove(store, id) {\n  store.delete(id);\n}\n"
+        for mode in (SYMLINK, context.SUBMODULE_MODE):
+            with self.subTest(base_mode=mode):
+                files = {**BASE_FILES, "src/converted.ts": (mode, old_target)}
+                base = self.github.commit("nonregular-base-" + mode, self.shas["base"], files)
+                files["src/converted.ts"] = (FILE_MODE, new_text)
+                head = self.github.commit("regular-head-" + mode, base, files)
+                result = context.collect_context(REPOSITORY, NUMBER, head_sha=head, base_sha=base)
+                record = next(item for item in result["files"] if item["path"] == "src/converted.ts")
+                self.assertEqual(record.get("head_content"), new_text)
+                self.assertIn("+  store.delete(id);", record["patch"])
+                self.assertEqual(record["changed_lines"], [1, 2, 3])
+                self.assertFalse(any(item["path"] == "src/converted.ts"
+                                     for item in result["coverage"]["excluded_files"]))
+                self.assertNotIn(old_target, json.dumps(result))
+                self.assertFalse(self.blob_sha_requested(old_target))
+
+    def test_nonregular_replacement_without_api_patch_remains_a_coverage_gap(self):
+        files = {**BASE_FILES, "src/converted.ts": (SYMLINK, "../secrets/old-pointer.pem")}
+        base = self.github.commit("conversion-missing-patch-base", self.shas["base"], files)
+        files["src/converted.ts"] = (FILE_MODE, "export const source = 1;\n")
+        head = self.github.commit("conversion-missing-patch-head", base, files)
+        compare = self.github._compare
+
+        def without_patch(before, after):
+            result = compare(before, after)
+            for record in result["files"]:
+                record.pop("patch", None)
+            return result
+
+        self.github._compare = without_patch
+        result = context.collect_context(REPOSITORY, NUMBER, head_sha=head, base_sha=base)
+        self.assertFalse(result["coverage"]["complete"])
+        self.assertIn({"path": "src/converted.ts", "reason": "no_patch_from_api"},
+                      result["coverage"]["omitted_files"])
+
+    def test_removed_nonregular_base_remains_excluded_without_reading_its_target(self):
+        old_target = "../secrets/old-pointer.pem"
+        for mode in (SYMLINK, context.SUBMODULE_MODE):
+            with self.subTest(base_mode=mode):
+                files = {**BASE_FILES, "src/converted.ts": (mode, old_target)}
+                base = self.github.commit("removed-base-" + mode, self.shas["base"], files)
+                del files["src/converted.ts"]
+                head = self.github.commit("removed-head-" + mode, base, files)
+                result = context.collect_context(REPOSITORY, NUMBER, head_sha=head, base_sha=base)
+                self.assertIn({"path": "src/converted.ts", "reason": "symlink_or_submodule"},
+                              result["coverage"]["excluded_files"])
+                self.assertNotIn(old_target, json.dumps(result))
+                self.assertFalse(self.blob_sha_requested(old_target))
+
+    def test_renamed_mode_conversion_without_text_changes_is_not_a_pure_rename(self):
+        text = "export const source = 1;\n"
+        files = {**BASE_FILES, "src/original.ts": (SYMLINK, text)}
+        base = self.github.commit("renamed-conversion-base", self.shas["base"], files)
+        del files["src/original.ts"]
+        files["src/converted.ts"] = (FILE_MODE, text)
+        head = self.github.commit("renamed-conversion-head", base, files)
+        self.github._compare = lambda before, after: {
+            "merge_base_commit": {"sha": base},
+            "files": [{"filename": "src/converted.ts", "previous_filename": "src/original.ts",
+                       "status": "renamed", "changes": 0}],
+        }
+        result = context.collect_context(REPOSITORY, NUMBER, head_sha=head, base_sha=base)
+        self.assertFalse(result["coverage"]["complete"])
+        self.assertIn({"path": "src/converted.ts", "reason": "no_patch_from_api"},
+                      result["coverage"]["omitted_files"])
+
     def test_credential_file_is_metadata_only(self):
         result = self.historical_context()
         env_record = next(record for record in result["files"] if record["path"] == ".env")

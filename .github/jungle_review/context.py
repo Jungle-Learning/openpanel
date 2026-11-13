@@ -869,6 +869,20 @@ def collect_context(repository: str, number: int, head_sha: Optional[str] = None
         notes.append(f"compare API lists at most {COMPARE_FILE_LIST_CAP} files; the changed-file list may be "
                      "incomplete")
 
+    # GitHub reports a file-type conversion as separate removed/added records
+    # with the same path. Keep its actual added-side patch once, so excluding
+    # the old symlink/gitlink cannot also exclude the new regular source.
+    changes_by_path: dict[str, list[dict]] = {}
+    for entry in compared_files:
+        changes_by_path.setdefault(str(entry.get("filename", "")), []).append(entry)
+    compared_files = []
+    for entries in changes_by_path.values():
+        if len(entries) == 2 and {entry.get("status") for entry in entries} == {"removed", "added"}:
+            added = next(entry for entry in entries if entry.get("status") == "added")
+            compared_files.append({**added, "status": "modified"})
+        else:
+            compared_files.extend(entries)
+
     head_reader = _CommitReader(repository, resolved_head_sha)
     base_reader = _CommitReader(repository, merge_base_sha)
 
@@ -896,10 +910,11 @@ def collect_context(repository: str, number: int, head_sha: Optional[str] = None
             if old_path_reason in ("credential_path", "unsafe_path"):
                 reason = old_path_reason
         if reason is None:
-            # A symlink's patch is its target path; never pass it on (mode checked on both sides).
+            # Keep regular head source even when it replaces a symlink/gitlink.
+            # Neither a nonregular head nor a deleted nonregular base is source.
             on_head = status != "removed" and is_symlink_or_submodule(head_reader, path)
             on_base = status != "added" and is_symlink_or_submodule(base_reader, str(old_path or path))
-            if on_head or on_base:
+            if on_head or (on_base and status == "removed"):
                 reason = "symlink_or_submodule"
         if reason == "unsafe_path":
             diff_complete = False
@@ -913,10 +928,16 @@ def collect_context(repository: str, number: int, head_sha: Optional[str] = None
         if patch is None:
             # A pure rename has no patch by nature; anything else without one was withheld by the API
             # (binary or too large a diff).
-            if not (status == "renamed" and not compared.get("changes")):
+            if on_base or not (status == "renamed" and not compared.get("changes")):
                 diff_complete = False
                 omitted_files.append({"path": path, "reason": "no_patch_from_api"})
             continue
+        if on_base:
+            # The removed side contains a target path or gitlink, not old source.
+            # Withhold its bytes without changing the actual hunk coordinates.
+            patch = "\n".join("-[nonregular base content excluded]" if row.startswith("-") else row
+                              for row in str(patch).split("\n"))
+            info.append(f"{path}: regular source replaces a symlink/submodule; removed base content excluded")
         patch, patch_redacted = redact_secrets(str(patch), is_patch=True)
         if patch_redacted:
             info.append(f"{path}: credential-shaped value redacted from patch")
